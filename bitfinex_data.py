@@ -1,81 +1,92 @@
 """
-Module to fetch Bitcoin OHLC data from Bitfinex.
+Module to fetch Bitcoin OHLC data from Bitfinex API.
+Cloud-friendly version with no file dependencies.
 """
-import os
-import time
 import pandas as pd
 import requests
 
-DATA_FILE = "btc_ohlc_weekly_data.csv"
-API_ENDPOINT = "https://api-pub.bitfinex.com/v2/candles/trade:7D:tBTCUSD/hist"
+def get_bitcoin_ohlc(symbol='BTCUSD', timeframe='7D', limit=156):
+    """
+    Fetch OHLC data from Bitfinex for a specific symbol.
+    Returns weekly data by default (156 weeks = ~3 years).
+    """
+    try:
+        print(f"Starting Bitfinex OHLC fetch for {symbol} with timeframe {timeframe}...")
+        
+        # Bitfinex API v2 endpoint for candles
+        url = f"https://api-pub.bitfinex.com/v2/candles/trade:{timeframe}:t{symbol}/hist"
+        params = {
+            'limit': limit,
+            'sort': -1  # Sort in descending order (newest first)
+        }
+        
+        print(f"Fetching from URL: {url}")
+        print(f"Parameters: {params}")
+        
+        response = requests.get(url, params=params, timeout=15)
+        print(f"Response status code: {response.status_code}")
+        response.raise_for_status()
+        
+        data = response.json()
+        print(f"Received {len(data)} candles from Bitfinex")
+        
+        if not data:
+            print("No data returned from Bitfinex API")
+            return None
+        
+        # Convert to DataFrame for easier handling
+        df = pd.DataFrame(data, columns=['timestamp', 'open', 'close', 'high', 'low', 'volume'])
+        
+        # Convert timestamp to datetime
+        df['datetime'] = pd.to_datetime(df['timestamp'], unit='ms')
+        
+        # Sort by timestamp (oldest first)
+        df = df.sort_values('timestamp')
+        
+        print(f"Successfully processed {len(df)} OHLC records")
+        return df
+        
+    except requests.exceptions.Timeout:
+        print("Error: Bitfinex API request timed out")
+        return None
+    except requests.exceptions.ConnectionError:
+        print("Error: Could not connect to Bitfinex API")
+        return None
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching Bitcoin OHLC data: {e}")
+        return None
+    except Exception as e:
+        print(f"Unexpected error in Bitfinex data fetch: {e}")
+        return None
 
 def get_btc_ohlc_data():
     """
-    Reads weekly Bitcoin OHLC data from the local CSV file.
-    If the file doesn't exist, it fetches all data from 2013.
+    Fetch Bitcoin OHLC data directly from Bitfinex API (cloud-friendly).
+    No file dependencies - works entirely from API calls.
     """
-    if not os.path.exists(DATA_FILE):
-        fetch_and_update_data()
-    
-    return pd.read_csv(DATA_FILE, index_col='date', parse_dates=True)
+    try:
+        print("Fetching Bitcoin OHLC data directly from Bitfinex API...")
+        
+        # Fetch recent weekly data (156 weeks = ~3 years of data)
+        df = get_bitcoin_ohlc(symbol='BTCUSD', timeframe='7D', limit=156)
+        
+        if df is not None and not df.empty:
+            # Set the datetime column as index for easier year filtering
+            df.set_index('datetime', inplace=True)
+            print(f"Successfully fetched {len(df)} weeks of OHLC data")
+            return df
+        else:
+            print("No OHLC data received from API")
+            return pd.DataFrame()
+            
+    except Exception as e:
+        print(f"Error fetching OHLC data: {e}")
+        return pd.DataFrame()
 
 def fetch_and_update_data():
     """
-    Fetches new weekly Bitcoin OHLC data and appends it to the local CSV.
-    Fetches in chunks of 100 weeks.
+    Cloud-friendly data refresh function.
+    Simply clears cache and fetches fresh data.
     """
-    all_new_data = []
-    start_time = int(pd.Timestamp('2013-01-01').value / 1_000_000)
-
-    existing_df = None
-    if os.path.exists(DATA_FILE):
-        existing_df = pd.read_csv(DATA_FILE, index_col='date', parse_dates=True)
-        if 'volume' in existing_df.columns:
-            existing_df.drop(columns=['volume'], inplace=True)
-            existing_df.to_csv(DATA_FILE) # Save the file back without the volume column
-        if not existing_df.empty:
-            start_time = int(existing_df.index.max().value / 1_000_000) + 1
-
-    current_start = start_time
-    limit = 100 # 100 weeks per request
-
-    while True:
-        params = {
-            'start': current_start,
-            'limit': limit,
-            'sort': 1 # Sort from oldest to newest
-        }
-        response = requests.get(API_ENDPOINT, params=params, timeout=30)
-        data = response.json()
-
-        if data:
-            all_new_data.extend(data)
-            # The last timestamp in the response is the newest
-            last_timestamp_ms = data[-1][0]
-            current_start = last_timestamp_ms + 1
-        else:
-            # No more data to fetch
-            break
-        
-        # Stop if we have fetched up to the current time
-        if current_start > int(time.time() * 1000):
-            break
-        
-        time.sleep(1) # To avoid hitting rate limits
-
-    if all_new_data:
-        new_df = pd.DataFrame(all_new_data, columns=['mts', 'open', 'close', 'high', 'low', 'volume'])
-        new_df['date'] = pd.to_datetime(new_df['mts'], unit='ms')
-        new_df = new_df.drop(columns=['mts', 'volume'])
-        new_df = new_df.set_index('date')
-        
-        if existing_df is not None:
-            combined_df = pd.concat([existing_df, new_df])
-            combined_df = combined_df[~combined_df.index.duplicated(keep='last')]
-        else:
-            combined_df = new_df
-            
-        combined_df.sort_index(inplace=True)
-        combined_df.to_csv(DATA_FILE)
-
-    return True
+    print("Refreshing Bitcoin OHLC data from API...")
+    return True  # Always return True since we're fetching fresh data

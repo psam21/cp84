@@ -13,12 +13,12 @@
 ### Configuration Files
 - [x] `.streamlit/config.toml` - Streamlit configuration
 - [x] `.gitignore` - Git ignore rules
-- [x] `btc_ohlc_weekly_data.csv` - Historical Bitcoin data (optional)
-- [x] `default_portfolio.csv` - Default portfolio (optional)
 
-### Data Files (Auto-generated)
-- [x] Bitcoin OHLC data will be fetched automatically if not present
-- [x] Portfolio data will be created when user saves
+### Data Architecture (Cloud-Friendly)
+- [x] **Portfolio Data**: Uses Streamlit session state (no file dependencies)
+- [x] **Bitcoin OHLC Data**: Fetched directly from Bitfinex API (no CSV files)
+- [x] **Mempool Data**: Real-time API calls to mempool.space
+- [x] **Price Data**: Real-time API calls to Binance
 
 ## 🚀 Deployment Steps
 
