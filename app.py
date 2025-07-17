@@ -31,41 +31,34 @@ def cached_get_binance_prices():
 def cached_get_btc_ohlc_data():
     return get_btc_ohlc_data()
 
-# Portfolio management functions
-def load_default_portfolio():
-    """Load default portfolio from CSV file"""
-    csv_file = "default_portfolio.csv"
-    if os.path.exists(csv_file):
-        try:
-            df = pd.read_csv(csv_file)
-            if not df.empty:
-                row = df.iloc[0]  # Get first row
-                return {
-                    'btc': row.get('btc', 0.0),
-                    'eth': row.get('eth', 0.0),
-                    'bnb': row.get('bnb', 0.0),
-                    'pol': row.get('pol', 0.0)
-                }
-        except Exception as e:
-            st.error(f"Error loading portfolio: {e}")
-    return {'btc': 0.0, 'eth': 0.0, 'bnb': 0.0, 'pol': 0.0}
+# Portfolio management functions (cloud-friendly session state only)
+def initialize_portfolio_session():
+    """Initialize portfolio in session state with default values"""
+    if 'portfolio' not in st.session_state:
+        st.session_state.portfolio = {
+            'btc': 0.9997,
+            'eth': 9.9983,
+            'bnb': 29.5623,
+            'pol': 4986.01
+        }
 
-def save_default_portfolio(btc, eth, bnb, pol):
-    """Save default portfolio to CSV file"""
-    csv_file = "default_portfolio.csv"
-    
-    try:
-        df = pd.DataFrame({
-            'btc': [btc],
-            'eth': [eth],
-            'bnb': [bnb],
-            'pol': [pol]
-        })
-        df.to_csv(csv_file, index=False)
-        return True
-    except Exception as e:
-        st.error(f"Error saving portfolio: {e}")
-        return False
+def reset_to_default_portfolio():
+    """Reset portfolio to default values"""
+    st.session_state.portfolio = {
+        'btc': 0.9997,
+        'eth': 9.9983,
+        'bnb': 29.5623,
+        'pol': 4986.01
+    }
+
+def clear_portfolio():
+    """Clear all portfolio holdings"""
+    st.session_state.portfolio = {
+        'btc': 0.0,
+        'eth': 0.0,
+        'bnb': 0.0,
+        'pol': 0.0
+    }
 
 def main():
     """Main function to run the Streamlit app."""
@@ -75,6 +68,9 @@ def main():
         layout="wide",
         initial_sidebar_state="expanded"
     )
+    
+    # Initialize portfolio session state
+    initialize_portfolio_session()
     
     # Add custom CSS for consistent font sizing and styling
     st.markdown("""
@@ -225,9 +221,11 @@ def main():
                 st.metric("Current Price", "Loading...")
         with col_fetch:
             if st.button("Fetch Latest Data"):
-                with st.spinner("Fetching..."):
+                with st.spinner("Fetching comprehensive Bitcoin data from 2013..."):
+                    # Clear only OHLC cached data
+                    cached_get_btc_ohlc_data.clear()
                     fetch_and_update_data()
-                st.success("Updated!")
+                st.success("Bitcoin OHLC data updated!")
                 st.rerun()
 
         if not btc_data.empty:
@@ -470,104 +468,99 @@ def main():
         st.markdown("<br>", unsafe_allow_html=True)
         refresh_col1, refresh_col2 = st.columns([1, 3])
         with refresh_col1:
-            if st.button("🔄 Refresh All Data", type="primary"):
-                st.cache_data.clear()
+            if st.button("🔄 Refresh Mempool Data", type="primary"):
+                # Clear only mempool-related cached data
+                cached_get_mempool_info.clear()
+                cached_get_mempool_stats.clear()
                 st.rerun()
         with refresh_col2:
-            st.info("💡 Data refreshes automatically every 5 minutes. Click refresh for immediate update.")
+            st.info("💡 Mempool data refreshes automatically every 5 minutes. Click refresh for immediate update.")
 
     elif page == "Portfolio Value":
         st.header("💼 Portfolio Value Calculator")
         
-        # Load default portfolio from CSV
-        default_portfolio = load_default_portfolio()
+        # Initialize portfolio in session state
+        initialize_portfolio_session()
         
-        # Initialize session state with default portfolio if not already set
-        if 'btc_amount' not in st.session_state:
-            st.session_state.btc_amount = default_portfolio['btc']
-            st.session_state.eth_amount = default_portfolio['eth']
-            st.session_state.bnb_amount = default_portfolio['bnb']
-            st.session_state.pol_amount = default_portfolio['pol']
-        
-        # Enhanced load/save row with better styling
+        # Enhanced portfolio management with session state
         st.subheader("💾 Portfolio Management")
-        load_col, save_col, spacer = st.columns([1, 1, 1])
+        load_col, clear_col, spacer = st.columns([1, 1, 1])
         
         with load_col:
-            if st.button("📂 Load Default Portfolio", type="secondary", use_container_width=True):
-                st.session_state.btc_amount = default_portfolio['btc']
-                st.session_state.eth_amount = default_portfolio['eth']
-                st.session_state.bnb_amount = default_portfolio['bnb']
-                st.session_state.pol_amount = default_portfolio['pol']
-                st.success("✅ Loaded default portfolio")
+            if st.button("📂 Reset to Default", type="secondary", use_container_width=True):
+                reset_to_default_portfolio()
+                st.success("✅ Reset to default portfolio")
                 st.rerun()
         
-        with save_col:
-            if st.button("💾 Save as Default", type="primary", use_container_width=True):
-                if save_default_portfolio(
-                    st.session_state.get('btc_amount', 0.0),
-                    st.session_state.get('eth_amount', 0.0),
-                    st.session_state.get('bnb_amount', 0.0),
-                    st.session_state.get('pol_amount', 0.0)
-                ):
-                    st.success("✅ Saved as default portfolio")
-                    st.rerun()
+        with clear_col:
+            if st.button("�️ Clear All", type="primary", use_container_width=True):
+                clear_portfolio()
+                st.success("✅ Cleared all holdings")
+                st.rerun()
         
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # Enhanced input layout with crypto icons
+        # Enhanced input layout with crypto icons and live prices
         st.subheader("🪙 Asset Holdings")
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            st.markdown("""
+            st.markdown(f"""
             <div class="metric-card crypto-btc">
                 <h4>₿ Bitcoin (BTC)</h4>
+                <h2>${binance_prices['BTC']:,.0f}</h2>
+                <p>Current Price</p>
             </div>
             """, unsafe_allow_html=True)
             btc_amount = st.number_input("", 
-                                       value=st.session_state.get('btc_amount', 0.0), 
+                                       value=st.session_state.portfolio['btc'], 
                                        step=0.01, format="%.8f", key="btc_input",
                                        help="Enter your Bitcoin holdings")
         
         with col2:
-            st.markdown("""
+            st.markdown(f"""
             <div class="metric-card crypto-eth">
                 <h4>⟠ Ethereum (ETH)</h4>
+                <h2>${binance_prices['ETH']:,.0f}</h2>
+                <p>Current Price</p>
             </div>
             """, unsafe_allow_html=True)
             eth_amount = st.number_input("", 
-                                       value=st.session_state.get('eth_amount', 0.0), 
+                                       value=st.session_state.portfolio['eth'], 
                                        step=0.1, format="%.4f", key="eth_input",
                                        help="Enter your Ethereum holdings")
         
         with col3:
-            st.markdown("""
+            st.markdown(f"""
             <div class="metric-card crypto-bnb">
                 <h4>🔸 Binance Coin (BNB)</h4>
+                <h2>${binance_prices['BNB']:,.0f}</h2>
+                <p>Current Price</p>
             </div>
             """, unsafe_allow_html=True)
             bnb_amount = st.number_input("", 
-                                       value=st.session_state.get('bnb_amount', 0.0), 
+                                       value=st.session_state.portfolio['bnb'], 
                                        step=0.1, format="%.4f", key="bnb_input",
                                        help="Enter your BNB holdings")
         
         with col4:
-            st.markdown("""
+            st.markdown(f"""
             <div class="metric-card crypto-pol">
                 <h4>🔷 Polygon (POL)</h4>
+                <h2>${binance_prices['POL']:,.4f}</h2>
+                <p>Current Price</p>
             </div>
             """, unsafe_allow_html=True)
             pol_amount = st.number_input("", 
-                                       value=st.session_state.get('pol_amount', 0.0), 
+                                       value=st.session_state.portfolio['pol'], 
                                        step=1.0, format="%.2f", key="pol_input",
                                        help="Enter your Polygon holdings")
         
-        # Update session state
-        st.session_state.btc_amount = btc_amount
-        st.session_state.eth_amount = eth_amount
-        st.session_state.bnb_amount = bnb_amount
-        st.session_state.pol_amount = pol_amount
+        # Update session state portfolio
+        st.session_state.portfolio['btc'] = btc_amount
+        st.session_state.portfolio['eth'] = eth_amount
+        st.session_state.portfolio['bnb'] = bnb_amount
+        st.session_state.portfolio['pol'] = pol_amount
         
         st.markdown("<br>", unsafe_allow_html=True)
         
@@ -580,50 +573,9 @@ def main():
             total_value = btc_value + eth_value + bnb_value + pol_value
             
             # Create main layout - compact but rich
-            main_col1, main_col2 = st.columns([1.2, 0.8])
+            main_col1, main_col2 = st.columns([1, 1])
             
             with main_col1:
-                # Enhanced current prices section
-                st.subheader("📊 Current Market Prices")
-                
-                # BTC & ETH row
-                price_row1 = st.columns(2)
-                price_row1[0].markdown(f"""
-                <div class="metric-card crypto-btc">
-                    <h4>₿ Bitcoin</h4>
-                    <h2>${binance_prices['BTC']:,.0f}</h2>
-                    <p>BTC/USDT</p>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                price_row1[1].markdown(f"""
-                <div class="metric-card crypto-eth">
-                    <h4>⟠ Ethereum</h4>
-                    <h2>${binance_prices['ETH']:,.0f}</h2>
-                    <p>ETH/USDT</p>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                # BNB & POL row
-                price_row2 = st.columns(2)
-                price_row2[0].markdown(f"""
-                <div class="metric-card crypto-bnb">
-                    <h4>🔸 Binance Coin</h4>
-                    <h2>${binance_prices['BNB']:,.0f}</h2>
-                    <p>BNB/USDT</p>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                price_row2[1].markdown(f"""
-                <div class="metric-card crypto-pol">
-                    <h4>🔷 Polygon</h4>
-                    <h2>${binance_prices['POL']:,.4f}</h2>
-                    <p>POL/USDT</p>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                st.markdown("<br>", unsafe_allow_html=True)
-                
                 # Enhanced portfolio values
                 st.subheader("💰 Your Asset Values")
                 value_row1 = st.columns(2)
@@ -637,59 +589,17 @@ def main():
                                    delta=f"{bnb_amount:.4f} BNB" if bnb_amount > 0 else None)
                 value_row2[1].metric("🔷 POL Value", f"${pol_value:,.2f}", 
                                    delta=f"{pol_amount:.2f} POL" if pol_amount > 0 else None)
-                
+            
+            with main_col2:
                 # Enhanced total value section
                 st.subheader("🎯 Total Portfolio Value")
                 usdt_inr_rate = 83.50
                 
-                total_row = st.columns(3)
-                total_row[0].metric("💵 USD Value", f"${total_value:,.2f}")
-                total_row[1].metric("🇮🇳 INR Value", f"₹{total_value * usdt_inr_rate:,.2f}")
+                total_row = st.columns(1)
+                st.metric("💵 USD Value", f"${total_value:,.2f}")
+                st.metric("🇮🇳 INR Value", f"₹{total_value * usdt_inr_rate:,.2f}")
                 if binance_prices['BTC'] > 0 and total_value > 0:
-                    total_row[2].metric("₿ BTC Equivalent", f"₿{total_value / binance_prices['BTC']:.8f}")
-            
-            with main_col2:
-                # Enhanced portfolio distribution
-                st.subheader("📈 Portfolio Distribution")
-                
-                if total_value > 0:
-                    labels = ['₿ Bitcoin', '⟠ Ethereum', '🔸 BNB', '🔷 POL']
-                    values = [btc_value, eth_value, bnb_value, pol_value]
-                    
-                    # Filter out zero values
-                    non_zero_data = [(label, value) for label, value in zip(labels, values) if value > 0]
-                    
-                    if non_zero_data:
-                        labels, values = zip(*non_zero_data)
-                        percentages = [v/total_value*100 for v in values]
-                        
-                        fig_portfolio = go.Figure(data=[go.Pie(
-                            labels=labels,
-                            values=values,
-                            hole=0.4,
-                            marker_colors=['#f7931a', '#627eea', '#f3ba2f', '#8247e5'],
-                            textinfo='label+percent',
-                            textposition='auto',
-                            hovertemplate='<b>%{label}</b><br>Value: $%{value:,.2f}<br>Percentage: %{percent}<extra></extra>'
-                        )])
-                        
-                        fig_portfolio.update_layout(
-                            height=400,
-                            margin=dict(l=0, r=0, t=0, b=0),
-                            showlegend=False,
-                            plot_bgcolor='rgba(0,0,0,0)',
-                            paper_bgcolor='rgba(0,0,0,0)'
-                        )
-                        st.plotly_chart(fig_portfolio, use_container_width=True)
-                        
-                        # Add portfolio summary below chart
-                        st.markdown("### 📋 Portfolio Summary")
-                        for label, value, pct in zip(labels, values, percentages):
-                            st.markdown(f"**{label}**: ${value:,.2f} ({pct:.1f}%)")
-                    else:
-                        st.info("💡 Add some cryptocurrency holdings to see your portfolio distribution!")
-                else:
-                    st.info("💡 Enter your cryptocurrency holdings above to calculate your portfolio value and see the distribution chart.")
+                    st.metric("₿ BTC Equivalent", f"₿{total_value / binance_prices['BTC']:.8f}")
         
         except Exception as e:
             st.error(f"❌ Error calculating portfolio values: {e}")
