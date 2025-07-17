@@ -5,6 +5,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import os
+from datetime import datetime
 from bitfinex_data import get_btc_ohlc_data, fetch_and_update_data
 from mempool_data import get_mempool_info, get_mempool_stats
 from binance_data import get_binance_price
@@ -193,6 +194,7 @@ def main():
         "Bitcoin OHLC",
         "Mempool Data",
         "Portfolio Value",
+        "Bitcoin Metrics",
     ]
     page = st.sidebar.radio("Go to", tabs)
 
@@ -790,7 +792,472 @@ def main():
         
         except Exception as e:
             st.error(f"❌ Error calculating portfolio values: {e}")
-            st.info("Please ensure all price data is loaded correctly.")
+            st.info("🔄 Please try refreshing prices or check API connectivity.")
 
+    elif page == "Bitcoin Metrics":
+        st.header("📊 Bitcoin Metrics Dashboard")
+        
+        # Add cache for metrics with 5-minute TTL
+        @st.cache_data(ttl=300)
+        def cached_get_bitcoin_metrics():
+            from bitcoin_metrics import bitcoin_metrics
+            return bitcoin_metrics.get_comprehensive_metrics()
+        
+        # Refresh button
+        col_refresh, col_status = st.columns([1, 3])
+        with col_refresh:
+            if st.button("🔄 Refresh Metrics", type="secondary"):
+                cached_get_bitcoin_metrics.clear()
+                st.rerun()
+        
+        # Load metrics with spinner
+        with st.spinner("🔄 Loading comprehensive Bitcoin metrics..."):
+            try:
+                metrics = cached_get_bitcoin_metrics()
+                
+                with col_status:
+                    if len(metrics.get('errors', [])) == 0:
+                        st.success("✅ All metrics loaded successfully")
+                    elif len(metrics.get('errors', [])) < 5:
+                        st.warning(f"⚠️ {len(metrics['errors'])} metrics failed to load")
+                    else:
+                        st.error(f"❌ Multiple metrics failed ({len(metrics['errors'])} errors)")
+                
+                # Show errors in expander if any
+                if metrics.get('errors'):
+                    with st.expander(f"🔍 View {len(metrics['errors'])} API Issues"):
+                        for error in metrics['errors']:
+                            st.error(error)
+                
+                # === SECTION 1: PRICE & MARKET DATA ===
+                st.subheader("💰 Price & Market Data")
+                
+                price_col1, price_col2, price_col3, price_col4 = st.columns(4)
+                
+                # Bitcoin Price (Multi-source)
+                with price_col1:
+                    coingecko = metrics.get('coingecko', {})
+                    coindesk = metrics.get('coindesk_price', {})
+                    
+                    if coingecko.get('price_usd'):
+                        price = coingecko['price_usd']
+                        change_24h = coingecko.get('change_24h', 0)
+                        delta_color = "normal" if change_24h >= 0 else "inverse"
+                        st.metric(
+                            "💵 Bitcoin Price (USD)", 
+                            f"${price:,.2f}",
+                            delta=f"{change_24h:+.2f}% (24h)",
+                            delta_color=delta_color
+                        )
+                    elif coindesk.get('price_usd'):
+                        st.metric("💵 Bitcoin Price (USD)", f"${coindesk['price_usd']:,.2f}")
+                    else:
+                        st.metric("💵 Bitcoin Price (USD)", "API Failed")
+                
+                # Market Cap
+                with price_col2:
+                    if coingecko.get('market_cap_usd'):
+                        market_cap = coingecko['market_cap_usd']
+                        market_cap_t = market_cap / 1e12
+                        st.metric("🏛️ Market Cap", f"${market_cap_t:.2f}T")
+                    else:
+                        st.metric("🏛️ Market Cap", "API Failed")
+                
+                # 24h Volume
+                with price_col3:
+                    if coingecko.get('volume_24h'):
+                        volume = coingecko['volume_24h']
+                        volume_b = volume / 1e9
+                        st.metric("📊 24h Volume", f"${volume_b:.1f}B")
+                    else:
+                        st.metric("📊 24h Volume", "API Failed")
+                
+                # Bitcoin Dominance
+                with price_col4:
+                    global_data = metrics.get('global', {})
+                    if global_data.get('btc_dominance'):
+                        dominance = global_data['btc_dominance']
+                        st.metric("👑 BTC Dominance", f"{dominance:.1f}%")
+                    else:
+                        st.metric("👑 BTC Dominance", "API Failed")
+                
+                # Multi-currency prices
+                st.subheader("🌍 Global Prices")
+                curr_col1, curr_col2, curr_col3, curr_col4 = st.columns(4)
+                
+                with curr_col1:
+                    if coingecko.get('price_usd'):
+                        st.metric("🇺🇸 USD", f"${coingecko['price_usd']:,.2f}")
+                    else:
+                        st.metric("🇺🇸 USD", "N/A")
+                
+                with curr_col2:
+                    if coingecko.get('price_eur'):
+                        st.metric("🇪🇺 EUR", f"€{coingecko['price_eur']:,.2f}")
+                    else:
+                        st.metric("🇪🇺 EUR", "N/A")
+                
+                with curr_col3:
+                    if coingecko.get('price_gbp'):
+                        st.metric("🇬🇧 GBP", f"£{coingecko['price_gbp']:,.2f}")
+                    else:
+                        st.metric("🇬🇧 GBP", "N/A")
+                
+                with curr_col4:
+                    if coingecko.get('price_inr'):
+                        st.metric("🇮🇳 INR", f"₹{coingecko['price_inr']:,.0f}")
+                    else:
+                        st.metric("🇮🇳 INR", "N/A")
+                
+                # === SECTION 2: FEAR & GREED + SUPPLY METRICS ===
+                st.subheader("📈 Market Sentiment & Supply")
+                
+                fear_col1, fear_col2, fear_col3 = st.columns(3)
+                
+                # Fear & Greed Index
+                with fear_col1:
+                    fng_data = metrics.get('fear_greed', {})
+                    if fng_data.get('value') is not None:
+                        fng_value = fng_data['value']
+                        fng_class = fng_data.get('classification', 'Unknown')
+                        
+                        # Color based on fear/greed
+                        if fng_value < 25:
+                            color = "🔴"
+                        elif fng_value < 45:
+                            color = "🟠"
+                        elif fng_value < 55:
+                            color = "🟡"
+                        elif fng_value < 75:
+                            color = "🟢"
+                        else:
+                            color = "🚀"
+                        
+                        st.metric(f"{color} Fear & Greed Index", f"{fng_value}/100", delta=fng_class)
+                        
+                        # Add a progress bar
+                        st.progress(fng_value / 100)
+                    else:
+                        st.metric("😰 Fear & Greed Index", "API Failed")
+                
+                # Circulating Supply
+                with fear_col2:
+                    blockchain_data = metrics.get('blockchain', {})
+                    if blockchain_data.get('total_supply'):
+                        total_supply = blockchain_data['total_supply'] / 1e8  # Convert from satoshis
+                        remaining = 21_000_000 - total_supply
+                        st.metric("🪙 Circulating Supply", f"{total_supply:,.0f} BTC")
+                        st.metric("⏳ Remaining to Mine", f"{remaining:,.0f} BTC")
+                        
+                        # Progress bar to 21M
+                        progress = total_supply / 21_000_000
+                        st.progress(progress, text=f"{progress:.1%} of 21M mined")
+                    else:
+                        st.metric("🪙 Circulating Supply", "API Failed")
+                
+                # Block Count & Difficulty
+                with fear_col3:
+                    if blockchain_data.get('block_count'):
+                        st.metric("🧱 Block Count", f"{blockchain_data['block_count']:,}")
+                    else:
+                        st.metric("🧱 Block Count", "API Failed")
+                    
+                    if blockchain_data.get('mining_difficulty'):
+                        difficulty = blockchain_data['mining_difficulty']
+                        difficulty_t = difficulty / 1e12
+                        st.metric("⛏️ Mining Difficulty", f"{difficulty_t:.2f}T")
+                    else:
+                        st.metric("⛏️ Mining Difficulty", "API Failed")
+                
+                # === SECTION 3: NETWORK ACTIVITY CHARTS ===
+                st.subheader("🌐 Network Activity")
+                
+                # Check if we have chart data
+                charts = metrics.get('charts', {})
+                
+                if charts:
+                    # Create tabs for different chart categories
+                    chart_tab1, chart_tab2, chart_tab3 = st.tabs(["📊 Transactions", "⛏️ Mining", "💰 Economics"])
+                    
+                    with chart_tab1:
+                        # Transactions and Activity Charts
+                        trans_col1, trans_col2 = st.columns(2)
+                        
+                        with trans_col1:
+                            # Daily Transactions
+                            if 'n-transactions' in charts:
+                                tx_data = charts['n-transactions']
+                                if tx_data.get('values'):
+                                    # Prepare data
+                                    dates = [datetime.fromtimestamp(point['x']) for point in tx_data['values']]
+                                    values = [point['y'] for point in tx_data['values']]
+                                    
+                                    fig = go.Figure()
+                                    fig.add_trace(go.Scatter(
+                                        x=dates, 
+                                        y=values,
+                                        mode='lines',
+                                        name='Daily Transactions',
+                                        line=dict(color='#f7931a', width=2)
+                                    ))
+                                    
+                                    fig.update_layout(
+                                        title="📈 Daily Bitcoin Transactions",
+                                        xaxis_title="Date",
+                                        yaxis_title="Transactions",
+                                        height=400,
+                                        template="plotly_dark"
+                                    )
+                                    
+                                    st.plotly_chart(fig, use_container_width=True)
+                                    
+                                    # Show latest value
+                                    if values:
+                                        st.metric("🔄 Latest Daily Transactions", f"{values[-1]:,.0f}")
+                            else:
+                                st.error("❌ Transaction data unavailable")
+                        
+                        with trans_col2:
+                            # Active Addresses
+                            if 'n-active-addresses' in charts:
+                                addr_data = charts['n-active-addresses']
+                                if addr_data.get('values'):
+                                    # Similar plotting for active addresses
+                                    dates = [datetime.fromtimestamp(point['x']) for point in addr_data['values']]
+                                    values = [point['y'] for point in addr_data['values']]
+                                    
+                                    fig = go.Figure()
+                                    fig.add_trace(go.Scatter(
+                                        x=dates, 
+                                        y=values,
+                                        mode='lines+markers',
+                                        name='Active Addresses',
+                                        line=dict(color='#00d4aa', width=2),
+                                        marker=dict(size=4)
+                                    ))
+                                    
+                                    fig.update_layout(
+                                        title="👥 Daily Active Addresses",
+                                        xaxis_title="Date",
+                                        yaxis_title="Active Addresses",
+                                        height=400,
+                                        template="plotly_dark"
+                                    )
+                                    
+                                    st.plotly_chart(fig, use_container_width=True)
+                                    
+                                    if values:
+                                        st.metric("👤 Latest Active Addresses", f"{values[-1]:,.0f}")
+                            else:
+                                st.error("❌ Active addresses data unavailable")
+                    
+                    with chart_tab2:
+                        # Mining Charts
+                        mining_col1, mining_col2 = st.columns(2)
+                        
+                        with mining_col1:
+                            # Hash Rate
+                            if 'hash-rate' in charts:
+                                hash_data = charts['hash-rate']
+                                if hash_data.get('values'):
+                                    dates = [datetime.fromtimestamp(point['x']) for point in hash_data['values']]
+                                    values = [point['y'] / 1e18 for point in hash_data['values']]  # Convert to EH/s
+                                    
+                                    fig = go.Figure()
+                                    fig.add_trace(go.Scatter(
+                                        x=dates, 
+                                        y=values,
+                                        mode='lines',
+                                        name='Hash Rate (EH/s)',
+                                        line=dict(color='#ff6b35', width=3),
+                                        fill='tonexty'
+                                    ))
+                                    
+                                    fig.update_layout(
+                                        title="⚡ Bitcoin Network Hash Rate",
+                                        xaxis_title="Date",
+                                        yaxis_title="Hash Rate (EH/s)",
+                                        height=400,
+                                        template="plotly_dark"
+                                    )
+                                    
+                                    st.plotly_chart(fig, use_container_width=True)
+                                    
+                                    if values:
+                                        st.metric("⚡ Current Hash Rate", f"{values[-1]:.0f} EH/s")
+                            else:
+                                st.error("❌ Hash rate data unavailable")
+                        
+                        with mining_col2:
+                            # Mining Revenue
+                            if 'miners-revenue' in charts:
+                                revenue_data = charts['miners-revenue']
+                                if revenue_data.get('values'):
+                                    dates = [datetime.fromtimestamp(point['x']) for point in revenue_data['values']]
+                                    values = [point['y'] / 1e6 for point in revenue_data['values']]  # Convert to millions
+                                    
+                                    fig = go.Figure()
+                                    fig.add_trace(go.Scatter(
+                                        x=dates, 
+                                        y=values,
+                                        mode='lines',
+                                        name='Daily Revenue ($M)',
+                                        line=dict(color='#4ecdc4', width=2),
+                                        fill='tozeroy'
+                                    ))
+                                    
+                                    fig.update_layout(
+                                        title="💰 Daily Mining Revenue",
+                                        xaxis_title="Date",
+                                        yaxis_title="Revenue (Million USD)",
+                                        height=400,
+                                        template="plotly_dark"
+                                    )
+                                    
+                                    st.plotly_chart(fig, use_container_width=True)
+                                    
+                                    if values:
+                                        st.metric("💰 Latest Daily Revenue", f"${values[-1]:.1f}M")
+                            else:
+                                st.error("❌ Mining revenue data unavailable")
+                    
+                    with chart_tab3:
+                        # Economic Charts
+                        econ_col1, econ_col2 = st.columns(2)
+                        
+                        with econ_col1:
+                            # Transaction Fees
+                            if 'transaction-fees-usd' in charts:
+                                fees_data = charts['transaction-fees-usd']
+                                if fees_data.get('values'):
+                                    dates = [datetime.fromtimestamp(point['x']) for point in fees_data['values']]
+                                    values = [point['y'] for point in fees_data['values']]
+                                    
+                                    fig = go.Figure()
+                                    fig.add_trace(go.Scatter(
+                                        x=dates, 
+                                        y=values,
+                                        mode='lines+markers',
+                                        name='Avg Transaction Fee',
+                                        line=dict(color='#e74c3c', width=2),
+                                        marker=dict(size=3)
+                                    ))
+                                    
+                                    fig.update_layout(
+                                        title="💳 Average Transaction Fees",
+                                        xaxis_title="Date",
+                                        yaxis_title="Fee (USD)",
+                                        height=400,
+                                        template="plotly_dark"
+                                    )
+                                    
+                                    st.plotly_chart(fig, use_container_width=True)
+                                    
+                                    if values:
+                                        st.metric("💳 Current Avg Fee", f"${values[-1]:.2f}")
+                            else:
+                                st.error("❌ Transaction fees data unavailable")
+                        
+                        with econ_col2:
+                            # Mempool Size
+                            if 'mempool-size' in charts:
+                                mempool_data = charts['mempool-size']
+                                if mempool_data.get('values'):
+                                    dates = [datetime.fromtimestamp(point['x']) for point in mempool_data['values']]
+                                    values = [point['y'] / 1e6 for point in mempool_data['values']]  # Convert to MB
+                                    
+                                    fig = go.Figure()
+                                    fig.add_trace(go.Scatter(
+                                        x=dates, 
+                                        y=values,
+                                        mode='lines',
+                                        name='Mempool Size (MB)',
+                                        line=dict(color='#9b59b6', width=2),
+                                        fill='tozeroy'
+                                    ))
+                                    
+                                    fig.update_layout(
+                                        title="📦 Mempool Size",
+                                        xaxis_title="Date",
+                                        yaxis_title="Size (MB)",
+                                        height=400,
+                                        template="plotly_dark"
+                                    )
+                                    
+                                    st.plotly_chart(fig, use_container_width=True)
+                                    
+                                    if values:
+                                        st.metric("📦 Current Mempool", f"{values[-1]:.1f} MB")
+                            else:
+                                st.error("❌ Mempool data unavailable")
+                else:
+                    st.warning("⚠️ Chart data unavailable - API issues detected")
+                
+                # === SECTION 4: NETWORK HEALTH ===
+                st.subheader("🌐 Network Health")
+                
+                network_col1, network_col2, network_col3 = st.columns(3)
+                
+                # Block timing
+                with network_col1:
+                    if 'avg-block-time' in charts:
+                        block_time_data = charts['avg-block-time']
+                        if block_time_data.get('values') and len(block_time_data['values']) > 0:
+                            latest_block_time = block_time_data['values'][-1]['y'] / 60  # Convert to minutes
+                            delta_color = "normal" if 8 <= latest_block_time <= 12 else "inverse"
+                            st.metric(
+                                "⏰ Avg Block Time", 
+                                f"{latest_block_time:.1f} min",
+                                delta=f"Target: 10 min",
+                                delta_color=delta_color
+                            )
+                        else:
+                            st.metric("⏰ Avg Block Time", "API Failed")
+                    else:
+                        st.metric("⏰ Avg Block Time", "API Failed")
+                
+                # Block size
+                with network_col2:
+                    if 'avg-block-size' in charts:
+                        block_size_data = charts['avg-block-size']
+                        if block_size_data.get('values') and len(block_size_data['values']) > 0:
+                            latest_block_size = block_size_data['values'][-1]['y'] / 1e6  # Convert to MB
+                            st.metric("📏 Avg Block Size", f"{latest_block_size:.2f} MB")
+                        else:
+                            st.metric("📏 Avg Block Size", "API Failed")
+                    else:
+                        st.metric("📏 Avg Block Size", "API Failed")
+                
+                # Block reward
+                with network_col3:
+                    if blockchain_data.get('block_reward'):
+                        block_reward = blockchain_data['block_reward']
+                        st.metric("🎁 Block Reward", f"{block_reward} BTC")
+                        
+                        # Calculate next halving (rough estimate)
+                        current_blocks = blockchain_data.get('block_count', 0)
+                        blocks_per_halving = 210_000
+                        next_halving_block = ((current_blocks // blocks_per_halving) + 1) * blocks_per_halving
+                        blocks_to_halving = next_halving_block - current_blocks
+                        days_to_halving = (blocks_to_halving * 10) / (60 * 24)  # ~10 min blocks
+                        
+                        st.metric("📅 Est. Days to Halving", f"{days_to_halving:,.0f}")
+                    else:
+                        st.metric("🎁 Block Reward", "API Failed")
+                
+                # Show data freshness
+                st.divider()
+                col_time, col_sources = st.columns(2)
+                with col_time:
+                    st.caption(f"🕐 Data refreshed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                with col_sources:
+                    st.caption("📡 Sources: CoinGecko, Blockchain.info, Alternative.me, Bitnodes")
+                
+            except Exception as e:
+                st.error(f"❌ Failed to load Bitcoin metrics: {str(e)}")
+                st.info("🔄 Please try refreshing the page or check your internet connection.")
+
+if __name__ == "__main__":
+    main()
 if __name__ == "__main__":
     main()
