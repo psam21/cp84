@@ -20,12 +20,46 @@ def cached_get_mempool_stats():
 
 @st.cache_data(ttl=300)
 def cached_get_binance_prices():
-    return {
-        'BTC': get_binance_price("BTCUSDT"),
-        'ETH': get_binance_price("ETHUSDT"),
-        'BNB': get_binance_price("BNBUSDT"),
-        'POL': get_binance_price("POLUSDT")
-    }
+    """Fetch Binance prices with transparent error reporting"""
+    try:
+        prices = {}
+        symbols = [("BTC", "BTCUSDT"), ("ETH", "ETHUSDT"), ("BNB", "BNBUSDT"), ("POL", "POLUSDT")]
+        errors = []
+        
+        for symbol, pair in symbols:
+            try:
+                price = get_binance_price(pair)
+                if price and price > 0:
+                    prices[symbol] = price
+                    print(f"✅ {symbol}: ${price:,.2f}")
+                else:
+                    error_msg = f"❌ {symbol}: Invalid price returned (got: {price})"
+                    errors.append(error_msg)
+                    print(error_msg)
+                    prices[symbol] = None
+            except Exception as e:
+                error_msg = f"❌ {symbol}: API call failed - {str(e)}"
+                errors.append(error_msg)
+                print(error_msg)
+                prices[symbol] = None
+        
+        # Return both prices and errors for transparent reporting
+        return {
+            'prices': prices,
+            'errors': errors,
+            'success_count': len([p for p in prices.values() if p is not None]),
+            'total_count': len(symbols)
+        }
+            
+    except Exception as e:
+        error_msg = f"❌ Critical error in price fetching: {str(e)}"
+        print(error_msg)
+        return {
+            'prices': {'BTC': None, 'ETH': None, 'BNB': None, 'POL': None},
+            'errors': [error_msg],
+            'success_count': 0,
+            'total_count': 4
+        }
 
 @st.cache_data(ttl=300)
 def cached_get_btc_ohlc_data():
@@ -110,26 +144,45 @@ def main():
     </style>
     """, unsafe_allow_html=True)
 
-    # Pre-fetch all data at startup with better error handling
+    # Pre-fetch all data at startup with transparent error reporting
     with st.spinner("🔄 Loading cryptocurrency data..."):
         try:
+            # Force fresh API calls - clear cache first
+            cached_get_binance_prices.clear()
+            
             mempool_data = cached_get_mempool_info()
             mempool_stats = cached_get_mempool_stats()
-            binance_prices = cached_get_binance_prices()
+            price_result = cached_get_binance_prices()
             btc_data = cached_get_btc_ohlc_data()
             
-            # Validate critical data
-            if not binance_prices or 'BTC' not in binance_prices:
-                st.warning("⚠️ Some price data may be unavailable. Retrying...")
-                binance_prices = {'BTC': 0, 'ETH': 0, 'BNB': 0, 'POL': 0}
+            # Extract price data and show transparent status
+            binance_prices = price_result['prices']
+            price_errors = price_result['errors']
+            success_rate = f"{price_result['success_count']}/{price_result['total_count']}"
+            
+            # Show API status to user with detailed information
+            if price_result['success_count'] == price_result['total_count']:
+                st.success(f"✅ All price APIs successful ({success_rate})")
+            elif price_result['success_count'] > 0:
+                st.warning(f"⚠️ Partial API success ({success_rate}) - Some prices may be unavailable")
+                with st.expander("🔍 View API Issues"):
+                    for error in price_errors:
+                        st.error(error)
+            else:
+                st.error(f"❌ All price APIs failed ({success_rate}) - No live prices available")
+                with st.expander("🔍 View All API Errors"):
+                    for error in price_errors:
+                        st.error(error)
+                    st.info("💡 Try refreshing the page or using the 'Refresh Prices' button in Portfolio section")
                 
         except Exception as e:
-            st.error(f"❌ Error loading data: {e}")
+            st.error(f"❌ Critical error loading data: {e}")
             st.info("🔄 Please refresh the page to retry data loading.")
-            # Set fallback data to prevent crashes
+            # Set fallback data but be transparent about it
+            st.warning("⚠️ Using fallback data due to loading errors")
             mempool_data = {'error': 'Data unavailable'}
             mempool_stats = {'error': 'Data unavailable'}
-            binance_prices = {'BTC': 0, 'ETH': 0, 'BNB': 0, 'POL': 0}
+            binance_prices = {'BTC': None, 'ETH': None, 'BNB': None, 'POL': None}
             btc_data = pd.DataFrame()
 
     # Sidebar for navigation
@@ -189,36 +242,47 @@ def main():
         Its unique combination of scarcity, security, and decentralization makes it the most powerful store of value in human history.
         """)
         
-        # Add some Bitcoin stats using cached data
-        if 'BTC' in binance_prices:
-            st.subheader("📊 Live Bitcoin Metrics")
+        # Add some Bitcoin stats using cached data with API transparency
+        st.subheader("📊 Live Bitcoin Metrics")
+        
+        if binance_prices.get('BTC') and binance_prices['BTC'] > 0:
             metrics_cols = st.columns(3)
             
             try:
-                metrics_cols[0].metric("Current Price", f"${binance_prices['BTC']:,.2f}")
+                current_btc_price = binance_prices['BTC']
+                metrics_cols[0].metric("Current Price", f"${current_btc_price:,.2f}")
                 
                 # Calculate market cap with more accurate circulating supply (as of 2025)
                 circulating_supply = 19_800_000  # More accurate current circulating supply
-                market_cap = binance_prices['BTC'] * circulating_supply
+                market_cap = current_btc_price * circulating_supply
                 metrics_cols[1].metric("Market Cap", f"${market_cap/1e12:.2f}T")
                 
                 # Show accurate scarcity - much less remaining now
                 remaining_btc = 21_000_000 - circulating_supply
                 metrics_cols[2].metric("Remaining to Mine", f"{remaining_btc:,.0f} BTC")
                 
-            except:
-                st.info("Live metrics temporarily unavailable")
+            except Exception as e:
+                st.error(f"❌ Error calculating Bitcoin metrics: {e}")
+        else:
+            st.error("❌ Bitcoin Price API Failed")
+            st.info("💡 Live Bitcoin metrics unavailable due to API failure. The price data from Binance API could not be retrieved.")
+            
+            # Show a retry button
+            if st.button("🔄 Retry Bitcoin Price API", key="retry_btc_main"):
+                cached_get_binance_prices.clear()
+                st.rerun()
 
     elif page == "Bitcoin OHLC":
         st.header("Bitcoin Weekly OHLC Data")
         
-        # Compact header row
+        # Compact header row with API transparency
         col_price, col_fetch = st.columns([2, 1])
         with col_price:
-            try:
-                st.metric("Current Price", f"${binance_prices['BTC']:,.2f}")
-            except:
-                st.metric("Current Price", "Loading...")
+            current_btc_price = binance_prices.get('BTC')
+            if current_btc_price and current_btc_price > 0:
+                st.metric("Current Price", f"${current_btc_price:,.2f}")
+            else:
+                st.metric("Current Price", "❌ API Failed", delta="Binance API unavailable")
         with col_fetch:
             if st.button("Fetch Latest Data"):
                 with st.spinner("Fetching comprehensive Bitcoin data from 2013..."):
@@ -502,59 +566,127 @@ def main():
         
         # Enhanced input layout with crypto icons and live prices
         st.subheader("🪙 Asset Holdings")
+        
+        # Add price refresh button with transparent status
+        refresh_col, status_col = st.columns([1, 3])
+        with refresh_col:
+            if st.button("🔄 Force Refresh Prices", type="secondary", help="Force fresh API calls"):
+                cached_get_binance_prices.clear()
+                with st.spinner("Fetching fresh prices from Binance API..."):
+                    price_result = cached_get_binance_prices()
+                    
+                # Show immediate feedback on refresh
+                if price_result['success_count'] == price_result['total_count']:
+                    st.success(f"✅ All prices refreshed successfully!")
+                else:
+                    st.error(f"❌ Price refresh failed ({price_result['success_count']}/{price_result['total_count']} successful)")
+                    for error in price_result.get('errors', []):
+                        st.error(error)
+                st.rerun()
+        
+        with status_col:
+            # Show current API status
+            if 'prices' in locals() and 'price_result' in locals():
+                valid_prices = len([p for p in binance_prices.values() if p is not None and p > 0])
+                total_prices = len(binance_prices)
+                if valid_prices == total_prices:
+                    st.info(f"🟢 Live Prices: {valid_prices}/{total_prices} APIs working")
+                elif valid_prices > 0:
+                    st.warning(f"🟡 Live Prices: {valid_prices}/{total_prices} APIs working")
+                else:
+                    st.error(f"🔴 Live Prices: {valid_prices}/{total_prices} APIs working")
+        
         col1, col2, col3, col4 = st.columns(4)
         
+        # Extract individual prices with None checking
+        btc_price = binance_prices.get('BTC')
+        eth_price = binance_prices.get('ETH')
+        bnb_price = binance_prices.get('BNB')
+        pol_price = binance_prices.get('POL')
+        
         with col1:
+            if btc_price and btc_price > 0:
+                price_display = f"${btc_price:,.0f}"
+                card_class = "crypto-btc"
+            else:
+                price_display = "API Failed"
+                card_class = "crypto-btc fee-high"  # Red background for failed API
+            
             st.markdown(f"""
-            <div class="metric-card crypto-btc">
+            <div class="metric-card {card_class}">
                 <h4>₿ Bitcoin (BTC)</h4>
-                <h2>${binance_prices['BTC']:,.0f}</h2>
-                <p>Current Price</p>
+                <h2>{price_display}</h2>
+                <p>{'Current Price' if btc_price and btc_price > 0 else 'Price Unavailable'}</p>
             </div>
             """, unsafe_allow_html=True)
-            btc_amount = st.number_input("", 
+            btc_amount = st.number_input("BTC Holdings", 
                                        value=st.session_state.portfolio['btc'], 
                                        step=0.01, format="%.8f", key="btc_input",
-                                       help="Enter your Bitcoin holdings")
+                                       help="Enter your Bitcoin holdings",
+                                       label_visibility="collapsed")
         
         with col2:
+            if eth_price and eth_price > 0:
+                price_display = f"${eth_price:,.0f}"
+                card_class = "crypto-eth"
+            else:
+                price_display = "API Failed"
+                card_class = "crypto-eth fee-high"
+                
             st.markdown(f"""
-            <div class="metric-card crypto-eth">
+            <div class="metric-card {card_class}">
                 <h4>⟠ Ethereum (ETH)</h4>
-                <h2>${binance_prices['ETH']:,.0f}</h2>
-                <p>Current Price</p>
+                <h2>{price_display}</h2>
+                <p>{'Current Price' if eth_price and eth_price > 0 else 'Price Unavailable'}</p>
             </div>
             """, unsafe_allow_html=True)
-            eth_amount = st.number_input("", 
+            eth_amount = st.number_input("ETH Holdings", 
                                        value=st.session_state.portfolio['eth'], 
                                        step=0.1, format="%.4f", key="eth_input",
-                                       help="Enter your Ethereum holdings")
+                                       help="Enter your Ethereum holdings",
+                                       label_visibility="collapsed")
         
         with col3:
+            if bnb_price and bnb_price > 0:
+                price_display = f"${bnb_price:,.0f}"
+                card_class = "crypto-bnb"
+            else:
+                price_display = "API Failed"
+                card_class = "crypto-bnb fee-high"
+                
             st.markdown(f"""
-            <div class="metric-card crypto-bnb">
+            <div class="metric-card {card_class}">
                 <h4>🔸 Binance Coin (BNB)</h4>
-                <h2>${binance_prices['BNB']:,.0f}</h2>
-                <p>Current Price</p>
+                <h2>{price_display}</h2>
+                <p>{'Current Price' if bnb_price and bnb_price > 0 else 'Price Unavailable'}</p>
             </div>
             """, unsafe_allow_html=True)
-            bnb_amount = st.number_input("", 
+            bnb_amount = st.number_input("BNB Holdings", 
                                        value=st.session_state.portfolio['bnb'], 
                                        step=0.1, format="%.4f", key="bnb_input",
-                                       help="Enter your BNB holdings")
+                                       help="Enter your BNB holdings",
+                                       label_visibility="collapsed")
         
         with col4:
+            if pol_price and pol_price > 0:
+                price_display = f"${pol_price:,.4f}"
+                card_class = "crypto-pol"
+            else:
+                price_display = "API Failed"
+                card_class = "crypto-pol fee-high"
+                
             st.markdown(f"""
-            <div class="metric-card crypto-pol">
+            <div class="metric-card {card_class}">
                 <h4>🔷 Polygon (POL)</h4>
-                <h2>${binance_prices['POL']:,.4f}</h2>
-                <p>Current Price</p>
+                <h2>{price_display}</h2>
+                <p>{'Current Price' if pol_price and pol_price > 0 else 'Price Unavailable'}</p>
             </div>
             """, unsafe_allow_html=True)
-            pol_amount = st.number_input("", 
+            pol_amount = st.number_input("POL Holdings", 
                                        value=st.session_state.portfolio['pol'], 
                                        step=1.0, format="%.2f", key="pol_input",
-                                       help="Enter your Polygon holdings")
+                                       help="Enter your Polygon holdings",
+                                       label_visibility="collapsed")
         
         # Update session state portfolio
         st.session_state.portfolio['btc'] = btc_amount
@@ -565,41 +697,90 @@ def main():
         st.markdown("<br>", unsafe_allow_html=True)
         
         try:
-            # Calculate values
-            btc_value = btc_amount * binance_prices['BTC']
-            eth_value = eth_amount * binance_prices['ETH']
-            bnb_value = bnb_amount * binance_prices['BNB']
-            pol_value = pol_amount * binance_prices['POL']
-            total_value = btc_value + eth_value + bnb_value + pol_value
+            # Calculate values with transparent API status checking
+            btc_value = btc_amount * btc_price if btc_price and btc_price > 0 else None
+            eth_value = eth_amount * eth_price if eth_price and eth_price > 0 else None
+            bnb_value = bnb_amount * bnb_price if bnb_price and bnb_price > 0 else None
+            pol_value = pol_amount * pol_price if pol_price and pol_price > 0 else None
+            
+            # Calculate total only from available values
+            valid_values = [v for v in [btc_value, eth_value, bnb_value, pol_value] if v is not None]
+            total_value = sum(valid_values) if valid_values else 0
+            
+            # Show detailed API status for calculations
+            failed_apis = []
+            if btc_price is None or btc_price <= 0: failed_apis.append("BTC")
+            if eth_price is None or eth_price <= 0: failed_apis.append("ETH") 
+            if bnb_price is None or bnb_price <= 0: failed_apis.append("BNB")
+            if pol_price is None or pol_price <= 0: failed_apis.append("POL")
+            
+            if failed_apis:
+                st.error(f"❌ Portfolio calculation incomplete: {', '.join(failed_apis)} price APIs failed")
+                st.info("💡 Values shown are partial calculations. Use 'Force Refresh Prices' button above to retry failed APIs.")
             
             # Create main layout - compact but rich
             main_col1, main_col2 = st.columns([1, 1])
             
             with main_col1:
-                # Enhanced portfolio values
+                # Enhanced portfolio values with API status
                 st.subheader("💰 Your Asset Values")
                 value_row1 = st.columns(2)
-                value_row1[0].metric("₿ Bitcoin Value", f"${btc_value:,.2f}", 
-                                   delta=f"{btc_amount:.8f} BTC" if btc_amount > 0 else None)
-                value_row1[1].metric("⟠ Ethereum Value", f"${eth_value:,.2f}", 
-                                   delta=f"{eth_amount:.4f} ETH" if eth_amount > 0 else None)
+                
+                # BTC Value
+                if btc_value is not None:
+                    value_row1[0].metric("₿ Bitcoin Value", f"${btc_value:,.2f}", 
+                                       delta=f"{btc_amount:.8f} BTC" if btc_amount > 0 else None)
+                else:
+                    value_row1[0].metric("₿ Bitcoin Value", "API Failed", 
+                                       delta="Price unavailable")
+                
+                # ETH Value  
+                if eth_value is not None:
+                    value_row1[1].metric("⟠ Ethereum Value", f"${eth_value:,.2f}", 
+                                       delta=f"{eth_amount:.4f} ETH" if eth_amount > 0 else None)
+                else:
+                    value_row1[1].metric("⟠ Ethereum Value", "API Failed",
+                                       delta="Price unavailable")
                 
                 value_row2 = st.columns(2)
-                value_row2[0].metric("🔸 BNB Value", f"${bnb_value:,.2f}", 
-                                   delta=f"{bnb_amount:.4f} BNB" if bnb_amount > 0 else None)
-                value_row2[1].metric("🔷 POL Value", f"${pol_value:,.2f}", 
-                                   delta=f"{pol_amount:.2f} POL" if pol_amount > 0 else None)
+                
+                # BNB Value
+                if bnb_value is not None:
+                    value_row2[0].metric("🔸 BNB Value", f"${bnb_value:,.2f}", 
+                                       delta=f"{bnb_amount:.4f} BNB" if bnb_amount > 0 else None)
+                else:
+                    value_row2[0].metric("� BNB Value", "API Failed",
+                                       delta="Price unavailable")
+                
+                # POL Value
+                if pol_value is not None:
+                    value_row2[1].metric("🔷 POL Value", f"${pol_value:,.2f}", 
+                                       delta=f"{pol_amount:.2f} POL" if pol_amount > 0 else None)
+                else:
+                    value_row2[1].metric("🔷 POL Value", "API Failed",
+                                       delta="Price unavailable")
             
             with main_col2:
-                # Enhanced total value section
+                # Enhanced total value section with API transparency
                 st.subheader("🎯 Total Portfolio Value")
                 usdt_inr_rate = 83.50
                 
+                if failed_apis:
+                    st.warning(f"⚠️ Partial calculation - {len(failed_apis)} API(s) failed")
+                
                 total_row = st.columns(1)
-                st.metric("💵 USD Value", f"${total_value:,.2f}")
-                st.metric("🇮🇳 INR Value", f"₹{total_value * usdt_inr_rate:,.2f}")
-                if binance_prices['BTC'] > 0 and total_value > 0:
-                    st.metric("₿ BTC Equivalent", f"₿{total_value / binance_prices['BTC']:.8f}")
+                if total_value > 0:
+                    st.metric("💵 USD Value", f"${total_value:,.2f}",
+                             delta=f"From {len(valid_values)}/4 assets" if failed_apis else None)
+                    st.metric("🇮🇳 INR Value", f"₹{total_value * usdt_inr_rate:,.2f}")
+                    if btc_price and btc_price > 0:
+                        st.metric("₿ BTC Equivalent", f"₿{total_value / btc_price:.8f}")
+                    else:
+                        st.metric("₿ BTC Equivalent", "BTC API Failed")
+                else:
+                    st.metric("💵 USD Value", "No Valid Prices")
+                    st.metric("🇮🇳 INR Value", "No Valid Prices")
+                    st.metric("₿ BTC Equivalent", "APIs Failed")
         
         except Exception as e:
             st.error(f"❌ Error calculating portfolio values: {e}")
