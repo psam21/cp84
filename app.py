@@ -19,47 +19,44 @@ def cached_get_mempool_stats():
     return get_mempool_stats()
 
 @st.cache_data(ttl=300)
-def cached_get_binance_prices():
-    """Fetch Binance prices with transparent error reporting"""
+def cached_get_crypto_prices():
+    """
+    Fetch crypto prices using multi-exchange fallback system.
+    Tries multiple exchanges for maximum Community Cloud reliability.
+    """
     try:
-        prices = {}
-        symbols = [("BTC", "BTCUSDT"), ("ETH", "ETHUSDT"), ("BNB", "BNBUSDT"), ("POL", "POLUSDT")]
-        errors = []
+        from multi_exchange import get_multi_exchange_prices
         
-        for symbol, pair in symbols:
-            try:
-                price = get_binance_price(pair)
-                if price and price > 0:
-                    prices[symbol] = price
-                    print(f"✅ {symbol}: ${price:,.2f}")
-                else:
-                    error_msg = f"❌ {symbol}: Invalid price returned (got: {price})"
-                    errors.append(error_msg)
-                    print(error_msg)
-                    prices[symbol] = None
-            except Exception as e:
-                error_msg = f"❌ {symbol}: API call failed - {str(e)}"
-                errors.append(error_msg)
-                print(error_msg)
-                prices[symbol] = None
+        print("🔄 Starting multi-exchange price fetch...")
+        result = get_multi_exchange_prices()
         
-        # Return both prices and errors for transparent reporting
-        return {
-            'prices': prices,
-            'errors': errors,
-            'success_count': len([p for p in prices.values() if p is not None]),
-            'total_count': len(symbols)
-        }
+        # Add source information to the result
+        if result['sources_used']:
+            sources_info = f"📡 Data sources: {', '.join(result['sources_used'])}"
+            print(sources_info)
+            
+            # Add this info to errors for user visibility
+            if 'sources_info' not in result:
+                result['sources_info'] = sources_info
+        
+        return result
             
     except Exception as e:
-        error_msg = f"❌ Critical error in price fetching: {str(e)}"
+        error_msg = f"❌ Critical error in multi-exchange price fetching: {str(e)}"
         print(error_msg)
         return {
             'prices': {'BTC': None, 'ETH': None, 'BNB': None, 'POL': None},
             'errors': [error_msg],
             'success_count': 0,
-            'total_count': 4
+            'total_count': 4,
+            'sources_used': []
         }
+
+# Keep the old function name for backward compatibility
+@st.cache_data(ttl=300)
+def cached_get_binance_prices():
+    """Legacy function name - now uses multi-exchange system"""
+    return cached_get_crypto_prices()
 
 @st.cache_data(ttl=300)
 def cached_get_btc_ohlc_data():
@@ -148,23 +145,27 @@ def main():
     with st.spinner("🔄 Loading cryptocurrency data..."):
         try:
             # Force fresh API calls - clear cache first
-            cached_get_binance_prices.clear()
+            cached_get_crypto_prices.clear()  # Use new function name
+            cached_get_binance_prices.clear()  # Clear legacy cache too
             
             mempool_data = cached_get_mempool_info()
             mempool_stats = cached_get_mempool_stats()
-            price_result = cached_get_binance_prices()
+            price_result = cached_get_crypto_prices()  # Use multi-exchange system
             btc_data = cached_get_btc_ohlc_data()
             
             # Extract price data and show transparent status
-            binance_prices = price_result['prices']
+            binance_prices = price_result['prices']  # Keep variable name for compatibility
             price_errors = price_result['errors']
             success_rate = f"{price_result['success_count']}/{price_result['total_count']}"
+            sources_used = price_result.get('sources_used', [])
             
-            # Show API status to user with detailed information
+            # Show API status to user with detailed information including sources
             if price_result['success_count'] == price_result['total_count']:
-                st.success(f"✅ All price APIs successful ({success_rate})")
+                sources_text = f" via {', '.join(sources_used)}" if sources_used else ""
+                st.success(f"✅ All price APIs successful ({success_rate}){sources_text}")
             elif price_result['success_count'] > 0:
-                st.warning(f"⚠️ Partial API success ({success_rate}) - Some prices may be unavailable")
+                sources_text = f" via {', '.join(sources_used)}" if sources_used else ""
+                st.warning(f"⚠️ Partial API success ({success_rate}){sources_text} - Some prices may be unavailable")
                 with st.expander("🔍 View API Issues"):
                     for error in price_errors:
                         st.error(error)
@@ -269,6 +270,7 @@ def main():
             
             # Show a retry button
             if st.button("🔄 Retry Bitcoin Price API", key="retry_btc_main"):
+                cached_get_crypto_prices.clear()
                 cached_get_binance_prices.clear()
                 st.rerun()
 
@@ -571,15 +573,19 @@ def main():
         refresh_col, status_col = st.columns([1, 3])
         with refresh_col:
             if st.button("🔄 Force Refresh Prices", type="secondary", help="Force fresh API calls"):
-                cached_get_binance_prices.clear()
-                with st.spinner("Fetching fresh prices from Binance API..."):
-                    price_result = cached_get_binance_prices()
+                cached_get_crypto_prices.clear()
+                cached_get_binance_prices.clear()  # Clear legacy cache too
+                with st.spinner("Fetching fresh prices from multiple exchanges..."):
+                    price_result = cached_get_crypto_prices()
                     
-                # Show immediate feedback on refresh
+                # Show immediate feedback on refresh with source information
+                sources_used = price_result.get('sources_used', [])
+                sources_text = f" via {', '.join(sources_used)}" if sources_used else ""
+                
                 if price_result['success_count'] == price_result['total_count']:
-                    st.success(f"✅ All prices refreshed successfully!")
+                    st.success(f"✅ All prices refreshed successfully{sources_text}!")
                 else:
-                    st.error(f"❌ Price refresh failed ({price_result['success_count']}/{price_result['total_count']} successful)")
+                    st.error(f"❌ Price refresh failed ({price_result['success_count']}/{price_result['total_count']} successful){sources_text}")
                     for error in price_result.get('errors', []):
                         st.error(error)
                 st.rerun()
