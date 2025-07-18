@@ -1896,6 +1896,9 @@ def main():
                 st.subheader("📦 Next Blocks in Mempool")
                 blocks_data = mempool_data['mempool_blocks'][:6]
                 
+                # Import plotly for chart creation
+                import plotly.graph_objects as go
+                
                 fig_blocks = go.Figure()
                 
                 # Enhanced color coding based on fee levels
@@ -1963,6 +1966,9 @@ def main():
             if 'error' not in mempool_data and 'mining_pools' in mempool_data:
                 st.subheader("🏊‍♂️ Mining Pool Distribution")
                 pools = mempool_data['mining_pools']['pools'][:6]
+                
+                # Import plotly for chart creation
+                import plotly.graph_objects as go
                 
                 # Enhanced colors for mining pools
                 pool_colors = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c']
