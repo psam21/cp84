@@ -10,7 +10,147 @@ from bitfinex_data import get_btc_ohlc_data, fetch_and_update_data
 from mempool_data import get_mempool_info, get_mempool_stats
 from binance_data import get_binance_price
 
-# Cache API calls for 5 minutes
+# Enhanced debug logging functions with full session instrumentation
+def debug_log(message, level="INFO", context=None, data=None):
+    """Enhanced debug logging with full session instrumentation"""
+    from datetime import datetime
+    
+    if 'debug_logs' not in st.session_state:
+        st.session_state.debug_logs = []
+        # Log session initialization
+        session_start = {
+            'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
+            'level': 'SYSTEM',
+            'message': '🚀 Debug session initialized',
+            'context': 'session_start',
+            'session_id': id(st.session_state),
+            'user_agent': st.context.headers.get('User-Agent', 'Unknown') if hasattr(st, 'context') and hasattr(st.context, 'headers') else 'Unknown',
+            'timestamp_full': datetime.now().isoformat(),
+            'log_sequence': 1
+        }
+        st.session_state.debug_logs.append(session_start)
+    
+    # Enhanced timestamp with full datetime
+    timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+    timestamp_full = datetime.now().isoformat()
+    
+    # Build comprehensive log entry
+    log_entry = {
+        'timestamp': timestamp,
+        'timestamp_full': timestamp_full,
+        'level': level,
+        'message': str(message),
+        'context': context,
+        'session_id': id(st.session_state),
+        'log_sequence': len(st.session_state.debug_logs) + 1
+    }
+    
+    # Add data payload if provided
+    if data is not None:
+        log_entry['data'] = data
+    
+    # Add system context for certain levels
+    if level in ['ERROR', 'SYSTEM', 'WARNING']:
+        try:
+            import psutil
+            import platform
+            log_entry['system_info'] = {
+                'platform': platform.system(),
+                'python_version': platform.python_version(),
+                'memory_usage_mb': psutil.Process().memory_info().rss / 1024 / 1024,
+                'cpu_percent': psutil.cpu_percent(interval=None)
+            }
+        except ImportError:
+            # psutil not available in this environment
+            import platform
+            log_entry['system_info'] = {
+                'platform': platform.system(),
+                'python_version': platform.python_version(),
+                'memory_usage_mb': 'unavailable',
+                'cpu_percent': 'unavailable'
+            }
+        except Exception:
+            log_entry['system_info'] = 'unavailable'
+    
+    # Add stack trace for errors
+    if level == 'ERROR':
+        try:
+            import traceback
+            log_entry['stack_trace'] = traceback.format_stack()
+        except:
+            log_entry['stack_trace'] = 'unavailable'
+    
+    st.session_state.debug_logs.append(log_entry)
+    
+    # Keep last 2000 entries for full session history (increased from 1000)
+    if len(st.session_state.debug_logs) > 2000:
+        st.session_state.debug_logs = st.session_state.debug_logs[-2000:]
+    
+    # Enhanced console logging
+    console_msg = f"[{timestamp}] {level}: {message}"
+    if context:
+        console_msg += f" | Context: {context}"
+    if data:
+        console_msg += f" | Data: {str(data)[:100]}..."
+    print(console_msg)
+
+def debug_log_api_call(api_name, endpoint, status, response_time=None, response_data=None, error=None):
+    """Specialized logging for API calls with full instrumentation"""
+    from datetime import datetime
+    
+    context_data = {
+        'api_name': api_name,
+        'endpoint': endpoint,
+        'status': status,
+        'response_time_ms': response_time,
+        'timestamp_iso': datetime.now().isoformat()
+    }
+    
+    if response_data:
+        context_data['response_preview'] = str(response_data)[:200] + "..." if len(str(response_data)) > 200 else str(response_data)
+    
+    if error:
+        context_data['error_details'] = str(error)
+        debug_log(f"🌐 API {api_name} FAILED: {endpoint} - {error}", "ERROR", f"api_{api_name.lower()}", context_data)
+    else:
+        debug_log(f"🌐 API {api_name} SUCCESS: {endpoint} ({response_time}ms)", "SUCCESS", f"api_{api_name.lower()}", context_data)
+
+def debug_log_data_processing(operation, input_data, output_data, processing_time=None):
+    """Specialized logging for data processing operations"""
+    from datetime import datetime
+    
+    context_data = {
+        'operation': operation,
+        'input_size': len(str(input_data)) if input_data else 0,
+        'output_size': len(str(output_data)) if output_data else 0,
+        'processing_time_ms': processing_time,
+        'timestamp_iso': datetime.now().isoformat()
+    }
+    
+    debug_log(f"⚙️ DATA PROCESSING: {operation}", "DATA", f"processing_{operation.lower().replace(' ', '_')}", context_data)
+
+def debug_log_user_action(action, details=None):
+    """Log user interactions and navigation"""
+    from datetime import datetime
+    
+    context_data = {
+        'action': action,
+        'details': details,
+        'timestamp_iso': datetime.now().isoformat()
+    }
+    
+    debug_log(f"👤 USER ACTION: {action}", "INFO", "user_interaction", context_data)
+
+def clear_debug_logs():
+    """Clear debug logs with proper logging of the action"""
+    log_count = len(st.session_state.debug_logs) if 'debug_logs' in st.session_state else 0
+    
+    if 'debug_logs' in st.session_state:
+        st.session_state.debug_logs = []
+    
+    # Log the clear action
+    debug_log(f"🗑️ Debug logs cleared (removed {log_count} entries)", "SYSTEM", "log_management")
+    print(f"[SYSTEM] Debug logs cleared - removed {log_count} entries")
 @st.cache_data(ttl=300)
 def cached_get_mempool_info():
     return get_mempool_info()
@@ -25,66 +165,65 @@ def cached_get_crypto_prices():
     Fetch crypto prices using multi-exchange fallback system.
     Tries multiple exchanges for maximum Community Cloud reliability.
     """
-    # Use session state to check debug mode
-    debug_mode = getattr(st.session_state, 'debug_mode', True)
-    
-    if debug_mode:
-        st.write("🔍 **DEBUG**: Starting multi-exchange price fetch...")
+    import time
+    start_time = time.time()
+    debug_log("Starting multi-exchange price fetch...", "INFO", "price_fetch_start")
     
     try:
         from multi_exchange import get_multi_exchange_prices
+        debug_log("Successfully imported multi_exchange module", "SUCCESS", "module_import")
         
-        if debug_mode:
-            st.write("✅ **DEBUG**: Successfully imported multi_exchange module")
-        
-        print("🔄 Starting multi-exchange price fetch...")
-        if debug_mode:
-            st.write("🔄 **DEBUG**: Calling get_multi_exchange_prices()...")
-        
+        debug_log_api_call("Multi-Exchange", "get_multi_exchange_prices()", "STARTING")
         result = get_multi_exchange_prices()
         
-        if debug_mode:
-            st.write(f"📊 **DEBUG**: Multi-exchange result received:")
-            st.write(f"- Success count: {result.get('success_count', 'MISSING')}")
-            st.write(f"- Total count: {result.get('total_count', 'MISSING')}")
-            st.write(f"- Sources used: {result.get('sources_used', 'MISSING')}")
-            st.write(f"- Errors count: {len(result.get('errors', []))}")
-            st.write(f"- Prices keys: {list(result.get('prices', {}).keys())}")
-            
-            # Log each price individually
-            prices = result.get('prices', {})
-            for symbol, price in prices.items():
-                st.write(f"- {symbol}: {price} (type: {type(price)})")
+        processing_time = round((time.time() - start_time) * 1000, 2)
+        
+        debug_log_data_processing("Multi-exchange price aggregation", 
+                                  f"Exchanges: {result.get('sources_used', [])}", 
+                                  f"Prices: {list(result.get('prices', {}).keys())}", 
+                                  processing_time)
+        
+        # Log detailed results
+        debug_log(f"Multi-exchange result received:", "INFO", "price_fetch_result")
+        debug_log(f"- Success count: {result.get('success_count', 'MISSING')}", "DATA", "success_metrics")
+        debug_log(f"- Total count: {result.get('total_count', 'MISSING')}", "DATA", "total_metrics")
+        debug_log(f"- Sources used: {result.get('sources_used', 'MISSING')}", "DATA", "source_metrics")
+        debug_log(f"- Errors count: {len(result.get('errors', []))}", "DATA", "error_metrics")
+        debug_log(f"- Prices keys: {list(result.get('prices', {}).keys())}", "DATA", "price_keys")
+        
+        # Log each price individually with validation
+        prices = result.get('prices', {})
+        for symbol, price in prices.items():
+            price_status = "VALID" if price and price > 0 else "INVALID"
+            debug_log(f"- {symbol}: {price} (type: {type(price).__name__}, status: {price_status})", 
+                     "DATA" if price_status == "VALID" else "WARNING", f"price_{symbol.lower()}")
         
         # Add source information to the result
         if result.get('sources_used'):
             sources_info = f"📡 Data sources: {', '.join(result['sources_used'])}"
-            print(sources_info)
-            if debug_mode:
-                st.write(f"📡 **DEBUG**: {sources_info}")
+            debug_log(sources_info, "SUCCESS", "source_summary")
             
             # Add this info to errors for user visibility
             if 'sources_info' not in result:
                 result['sources_info'] = sources_info
         
-        if debug_mode:
-            st.write("✅ **DEBUG**: Multi-exchange fetch completed successfully")
+        debug_log_api_call("Multi-Exchange", "get_multi_exchange_prices()", "SUCCESS", processing_time, 
+                          f"Got {len(prices)} prices from {len(result.get('sources_used', []))} sources")
+        
         return result
             
     except Exception as e:
-        error_msg = f"❌ Critical error in multi-exchange price fetching: {str(e)}"
-        print(error_msg)
-        if debug_mode:
-            st.error(f"🚨 **DEBUG ERROR**: {error_msg}")
-            st.write(f"📋 **DEBUG**: Exception type: {type(e)}")
-            st.write(f"📋 **DEBUG**: Exception details: {repr(e)}")
-            
-            # Try to get more details about the import error
-            try:
-                import multi_exchange
-                st.write("✅ **DEBUG**: multi_exchange module import successful")
-            except Exception as import_err:
-                st.error(f"❌ **DEBUG**: multi_exchange import failed: {import_err}")
+        error_msg = f"Critical error in multi-exchange price fetching: {str(e)}"
+        debug_log(error_msg, "ERROR")
+        debug_log(f"Exception type: {type(e).__name__}", "ERROR")
+        debug_log(f"Exception details: {repr(e)}", "ERROR")
+        
+        # Try to get more details about the import error
+        try:
+            import multi_exchange
+            debug_log("multi_exchange module import successful on retry", "INFO")
+        except Exception as import_err:
+            debug_log(f"multi_exchange import failed: {import_err}", "ERROR")
         
         return {
             'prices': {'BTC': None, 'ETH': None, 'BNB': None, 'POL': None},
@@ -134,7 +273,7 @@ def clear_portfolio():
     }
 
 def main():
-    """Main function to run the Streamlit app."""
+    """Main function to run the Streamlit app with full session instrumentation."""
     st.set_page_config(
         page_title="Bitcoin Crypto Dashboard",
         page_icon="₿",
@@ -145,11 +284,18 @@ def main():
     # Initialize portfolio session state
     initialize_portfolio_session()
     
-    # DEBUG MODE TOGGLE (for production debugging)
-    if 'debug_mode' not in st.session_state:
-        st.session_state.debug_mode = True  # Enable debug by default for Community Cloud debugging
+    # Initialize debug logs storage
+    if 'debug_logs' not in st.session_state:
+        st.session_state.debug_logs = []
     
-    # Add debug toggle in sidebar (will be added later after sidebar creation)
+    # Initialize debug mode
+    if 'debug_mode' not in st.session_state:
+        st.session_state.debug_mode = False  # Off by default, use logs tab instead
+    
+    # Log application startup
+    debug_log("🚀 Application startup initiated", "SYSTEM", "app_lifecycle")
+    debug_log(f"📱 Page config set: Bitcoin Crypto Dashboard", "INFO", "app_config")
+    debug_log(f"🔧 Session state initialized", "INFO", "session_management")
     
     # Add custom CSS for consistent font sizing and styling
     st.markdown("""
@@ -191,95 +337,119 @@ def main():
 
     # Pre-fetch all data at startup with transparent error reporting
     with st.spinner("🔄 Loading cryptocurrency data..."):
-        debug_mode = st.session_state.get('debug_mode', True)
-        
-        if debug_mode:
-            st.write("🔍 **DEBUG**: Starting data loading process...")
+        import time
+        app_start_time = time.time()
+        debug_log("Starting comprehensive data loading process...", "SYSTEM", "data_loading_start")
         
         try:
-            if debug_mode:
-                st.write("🔍 **DEBUG**: Clearing price caches...")
+            debug_log("Clearing price caches...", "INFO", "cache_management")
             
             # Force fresh API calls - clear cache first
             cached_get_crypto_prices.clear()  # Use new function name
             cached_get_binance_prices.clear()  # Clear legacy cache too
             
-            if debug_mode:
-                st.write("✅ **DEBUG**: Caches cleared successfully")
+            debug_log("Caches cleared successfully", "SUCCESS", "cache_management")
             
-            if debug_mode:
-                st.write("🔍 **DEBUG**: Loading mempool data...")
+            # Load mempool data with timing
+            mempool_start = time.time()
+            debug_log("Loading mempool data...", "INFO", "mempool_loading")
             mempool_data = cached_get_mempool_info()
-            if debug_mode:
-                st.write(f"📊 **DEBUG**: Mempool data type: {type(mempool_data)}")
+            mempool_time = round((time.time() - mempool_start) * 1000, 2)
+            debug_log_data_processing("Mempool Info", "API Request", mempool_data, mempool_time)
+            debug_log(f"Mempool data loaded in {mempool_time}ms", "SUCCESS", "mempool_loading")
             
-            if debug_mode:
-                st.write("🔍 **DEBUG**: Loading mempool stats...")
+            # Load mempool stats with timing
+            stats_start = time.time()
+            debug_log("Loading mempool stats...", "INFO", "mempool_stats")
             mempool_stats = cached_get_mempool_stats()
-            if debug_mode:
-                st.write(f"📊 **DEBUG**: Mempool stats type: {type(mempool_stats)}")
+            stats_time = round((time.time() - stats_start) * 1000, 2)
+            debug_log_data_processing("Mempool Stats", "API Request", mempool_stats, stats_time)
+            debug_log(f"Mempool stats loaded in {stats_time}ms", "SUCCESS", "mempool_stats")
             
-            if debug_mode:
-                st.write("🔍 **DEBUG**: Loading price data with multi-exchange system...")
+            # Load price data with comprehensive tracking
+            price_start = time.time()
+            debug_log("Loading price data with multi-exchange system...", "INFO", "price_loading")
             price_result = cached_get_crypto_prices()  # Use multi-exchange system
-            if debug_mode:
-                st.write(f"📊 **DEBUG**: Price result type: {type(price_result)}")
-                st.write(f"📊 **DEBUG**: Price result keys: {list(price_result.keys()) if isinstance(price_result, dict) else 'NOT A DICT'}")
+            price_time = round((time.time() - price_start) * 1000, 2)
+            debug_log_data_processing("Multi-Exchange Prices", 
+                                     f"Exchanges: {price_result.get('sources_used', [])}", 
+                                     f"Prices: {list(price_result.get('prices', {}).keys())}", 
+                                     price_time)
             
-            if debug_mode:
-                st.write("🔍 **DEBUG**: Loading BTC OHLC data...")
+            # Load BTC OHLC data with timing
+            btc_start = time.time()
+            debug_log("Loading BTC OHLC data...", "INFO", "btc_ohlc_loading")
             btc_data = cached_get_btc_ohlc_data()
-            if debug_mode:
-                st.write(f"📊 **DEBUG**: BTC data type: {type(btc_data)}")
+            btc_time = round((time.time() - btc_start) * 1000, 2)
+            debug_log_data_processing("BTC OHLC Data", "Binance API", 
+                                     f"Rows: {len(btc_data) if hasattr(btc_data, '__len__') else 'Unknown'}", 
+                                     btc_time)
             
             # Extract price data and show transparent status
-            if debug_mode:
-                st.write("🔍 **DEBUG**: Extracting price data from result...")
+            debug_log("Extracting and validating price data...", "INFO", "price_validation")
             binance_prices = price_result['prices']  # Keep variable name for compatibility
             price_errors = price_result['errors']
             success_rate = f"{price_result['success_count']}/{price_result['total_count']}"
             sources_used = price_result.get('sources_used', [])
             
-            if debug_mode:
-                st.write(f"📊 **DEBUG**: Extracted data:")
-                st.write(f"- binance_prices: {binance_prices}")
-                st.write(f"- price_errors: {price_errors}")
-                st.write(f"- success_rate: {success_rate}")
-                st.write(f"- sources_used: {sources_used}")
+            # Log comprehensive data summary
+            total_load_time = round((time.time() - app_start_time) * 1000, 2)
+            debug_log(f"Data loading completed in {total_load_time}ms", "SUCCESS", "data_loading_complete")
+            debug_log(f"- Mempool data: {mempool_time}ms", "DATA", "timing_breakdown")
+            debug_log(f"- Mempool stats: {stats_time}ms", "DATA", "timing_breakdown")
+            debug_log(f"- Price data: {price_time}ms", "DATA", "timing_breakdown")
+            debug_log(f"- BTC OHLC: {btc_time}ms", "DATA", "timing_breakdown")
+            
+            # Validate each price individually
+            for symbol, price in binance_prices.items():
+                validation_status = "VALID" if price and price > 0 else "INVALID"
+                debug_log(f"Price validation - {symbol}: ${price} ({validation_status})", 
+                         "SUCCESS" if validation_status == "VALID" else "WARNING", 
+                         f"price_validation_{symbol.lower()}")
+            
+            debug_log(f"Final extracted data summary:", "DATA", "data_summary")
+            debug_log(f"- Price success rate: {success_rate}", "DATA", "success_metrics")
+            debug_log(f"- Data sources used: {sources_used}", "DATA", "source_tracking")
+            debug_log(f"- Error count: {len(price_errors)}", "DATA", "error_tracking")
             
             # Show API status to user with detailed information including sources
             if price_result['success_count'] == price_result['total_count']:
                 sources_text = f" via {', '.join(sources_used)}" if sources_used else ""
                 st.success(f"✅ All price APIs successful ({success_rate}){sources_text}")
+                debug_log(f"All APIs successful: {success_rate}{sources_text}", "SUCCESS")
             elif price_result['success_count'] > 0:
                 sources_text = f" via {', '.join(sources_used)}" if sources_used else ""
                 st.warning(f"⚠️ Partial API success ({success_rate}){sources_text} - Some prices may be unavailable")
+                debug_log(f"Partial API success: {success_rate}{sources_text}", "WARNING")
                 with st.expander("🔍 View API Issues"):
                     for error in price_errors:
                         st.error(error)
             else:
                 st.error(f"❌ All price APIs failed ({success_rate}) - No live prices available")
+                debug_log(f"All APIs failed: {success_rate}", "ERROR")
                 with st.expander("🔍 View All API Errors"):
                     for error in price_errors:
                         st.error(error)
                     st.info("💡 Try refreshing the page or using the 'Refresh Prices' button in Portfolio section")
             
-            if debug_mode:
-                st.write("✅ **DEBUG**: Data loading completed successfully")
+            debug_log("Data loading completed successfully", "SUCCESS")
                 
         except Exception as e:
-            st.error(f"❌ Critical error loading data: {e}")
-            st.error(f"🚨 **DEBUG ERROR**: Exception type: {type(e)}")
-            st.error(f"🚨 **DEBUG ERROR**: Exception details: {repr(e)}")
-            st.error(f"🚨 **DEBUG ERROR**: Exception args: {e.args}")
+            error_msg = f"Critical error loading data: {e}"
+            debug_log(error_msg, "ERROR")
+            debug_log(f"Exception type: {type(e).__name__}", "ERROR")
+            debug_log(f"Exception details: {repr(e)}", "ERROR")
+            debug_log(f"Exception args: {e.args}", "ERROR")
             
             # Try to get traceback
             import traceback
             tb = traceback.format_exc()
-            st.error(f"🚨 **DEBUG TRACEBACK**:")
-            st.code(tb)
+            debug_log(f"Traceback: {tb}", "ERROR")
             
+            st.error(f"❌ {error_msg}")
             st.info("🔄 Please refresh the page to retry data loading.")
+            st.info("💡 Check the 'Debug Logs' tab for detailed error information.")
+            
             # Set fallback data but be transparent about it
             st.warning("⚠️ Using fallback data due to loading errors")
             mempool_data = {'error': 'Data unavailable'}
@@ -295,16 +465,12 @@ def main():
         "Mempool Data",
         "Portfolio Value",
         "Bitcoin Metrics",
+        "Debug Logs",
     ]
     page = st.sidebar.radio("Go to", tabs)
     
-    # Add debug toggle in sidebar
-    st.sidebar.divider()
-    debug_toggle = st.sidebar.checkbox("🔍 Production Debug", value=st.session_state.debug_mode, help="Show detailed logs for Community Cloud debugging")
-    st.session_state.debug_mode = debug_toggle
-    if debug_toggle:
-        st.sidebar.warning("⚠️ Debug mode ON")
-    st.sidebar.divider()
+    # Log user navigation
+    debug_log_user_action(f"Navigation to '{page}' tab", {'tab_name': page, 'available_tabs': tabs})
 
     if page == "Why Bitcoin?":
         st.header("Why Bitcoin is the Most Powerful Store of Value")
@@ -1365,7 +1531,262 @@ def main():
                 st.error(f"❌ Failed to load Bitcoin metrics: {str(e)}")
                 st.info("🔄 Please try refreshing the page or check your internet connection.")
 
-if __name__ == "__main__":
-    main()
+    elif page == "Debug Logs":
+        st.header("🔍 Debug Logs & Session Analytics")
+        st.caption("Comprehensive session instrumentation and production debugging")
+        
+        # Session Analytics Section
+        st.subheader("📈 Session Analytics")
+        
+        if 'debug_logs' in st.session_state and st.session_state.debug_logs:
+            logs = st.session_state.debug_logs
+            
+            # Calculate session metrics
+            total_logs = len(logs)
+            session_start = logs[0]['timestamp_full'] if logs else 'Unknown'
+            current_time = datetime.now().isoformat()
+            
+            # Count by levels
+            level_counts = {}
+            context_counts = {}
+            api_calls = 0
+            data_operations = 0
+            user_actions = 0
+            
+            for log in logs:
+                level = log.get('level', 'INFO')
+                level_counts[level] = level_counts.get(level, 0) + 1
+                
+                context = log.get('context', 'None')
+                context_counts[context] = context_counts.get(context, 0) + 1
+                
+                if context and context.startswith('api_'):
+                    api_calls += 1
+                elif context and context.startswith('processing_'):
+                    data_operations += 1
+                elif context == 'user_interaction':
+                    user_actions += 1
+            
+            # Display metrics in columns
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("📊 Total Logs", total_logs)
+                st.metric("🔴 Errors", level_counts.get('ERROR', 0))
+            with col2:
+                st.metric("🌐 API Calls", api_calls)
+                st.metric("🟡 Warnings", level_counts.get('WARNING', 0))
+            with col3:
+                st.metric("⚙️ Data Ops", data_operations)
+                st.metric("🟢 Successes", level_counts.get('SUCCESS', 0))
+            with col4:
+                st.metric("👤 User Actions", user_actions)
+                st.metric("ℹ️ Info Events", level_counts.get('INFO', 0))
+            
+            # Session timeline
+            st.subheader("⏱️ Session Timeline")
+            st.write(f"**Started:** {session_start}")
+            st.write(f"**Current:** {current_time}")
+            
+            # Top contexts
+            if context_counts:
+                st.subheader("🏷️ Top Activity Contexts")
+                sorted_contexts = sorted(context_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+                for context, count in sorted_contexts:
+                    st.write(f"• **{context}**: {count} events")
+        else:
+            st.info("📝 No debug logs available yet. Session analytics will appear here as the application runs.")
+            
+        # Session Export and Summary
+        st.subheader("💾 Session Export & Summary")
+        col_export1, col_export2 = st.columns(2)
+        
+        with col_export1:
+            if st.button("📋 Generate Session Summary"):
+                if 'debug_logs' in st.session_state and st.session_state.debug_logs:
+                    logs = st.session_state.debug_logs
+                    
+                    # Generate comprehensive session summary
+                    summary = f"""
+# Session Summary Report
+**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+**Session ID:** {id(st.session_state)}
+**Total Logs:** {len(logs)}
+
+## Key Metrics
+- **Errors:** {len([l for l in logs if l.get('level') == 'ERROR'])}
+- **Warnings:** {len([l for l in logs if l.get('level') == 'WARNING'])}
+- **API Calls:** {len([l for l in logs if l.get('context', '').startswith('api_')])}
+- **Data Operations:** {len([l for l in logs if l.get('context', '').startswith('processing_')])}
+- **User Actions:** {len([l for l in logs if l.get('context') == 'user_interaction'])}
+
+## Session Timeline
+- **Started:** {logs[0]['timestamp_full'] if logs else 'Unknown'}
+- **Latest:** {logs[-1]['timestamp_full'] if logs else 'Unknown'}
+
+## Error Summary
+"""
+                    errors = [l for l in logs if l.get('level') == 'ERROR']
+                    if errors:
+                        for error in errors[-5:]:  # Last 5 errors
+                            summary += f"- **{error['timestamp']}:** {error['message']}\n"
+                    else:
+                        summary += "- No errors recorded in this session\n"
+                    
+                    summary += f"""
+## Recent Activity (Last 10 Events)
+"""
+                    for log in logs[-10:]:
+                        summary += f"- **{log['timestamp']}** [{log['level']}] {log['message']}\n"
+                    
+                    st.download_button(
+                        label="📥 Download Session Report",
+                        data=summary,
+                        file_name=f"session_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
+                        mime="text/markdown"
+                    )
+                else:
+                    st.warning("No session data available for export.")
+        
+        with col_export2:
+            if st.button("📊 Export Raw Log Data"):
+                if 'debug_logs' in st.session_state and st.session_state.debug_logs:
+                    import json
+                    log_data = json.dumps(st.session_state.debug_logs, indent=2, default=str)
+                    
+                    st.download_button(
+                        label="📥 Download Raw JSON",
+                        data=log_data,
+                        file_name=f"debug_logs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                        mime="application/json"
+                    )
+                else:
+                    st.warning("No log data available for export.")
+        
+        st.divider()
+        
+        # Control buttons
+        col1, col2, col3 = st.columns([1, 1, 4])
+        with col1:
+            if st.button("🗑️ Clear Logs"):
+                clear_debug_logs()
+                st.success("Logs cleared!")
+                st.rerun()
+        
+        with col2:
+            auto_refresh = st.checkbox("🔄 Auto-refresh", value=False)
+        
+        # Show logs count and session info
+        log_count = len(st.session_state.debug_logs) if 'debug_logs' in st.session_state else 0
+        session_id = id(st.session_state)
+        st.info(f"📊 Total logs: {log_count} (max 2000) | 🆔 Session ID: {session_id}")
+        
+        # Display logs
+        if 'debug_logs' in st.session_state and st.session_state.debug_logs:
+            # Create a container for logs
+            log_container = st.container()
+            
+            # Show logs in reverse order (newest first)
+            logs = list(reversed(st.session_state.debug_logs))
+            
+            # Enhanced filtering options
+            col_filter1, col_filter2, col_filter3 = st.columns(3)
+            with col_filter1:
+                level_filter = st.selectbox(
+                    "Filter by level:",
+                    ["ALL", "ERROR", "WARNING", "SUCCESS", "INFO", "DATA", "SYSTEM"],
+                    index=0
+                )
+            with col_filter2:
+                context_filter = st.selectbox(
+                    "Filter by context:",
+                    ["ALL"] + list(set([log.get('context', 'None') for log in logs if log.get('context')])),
+                    index=0
+                )
+            with col_filter3:
+                show_details = st.checkbox("Show detailed info", value=False)
+            
+            # Apply filters
+            filtered_logs = logs
+            if level_filter != "ALL":
+                filtered_logs = [log for log in filtered_logs if log.get('level', 'INFO') == level_filter]
+            if context_filter != "ALL":
+                filtered_logs = [log for log in filtered_logs if log.get('context') == context_filter]
+            
+            with log_container:
+                st.subheader(f"📋 Debug Logs ({len(filtered_logs)} of {len(logs)} shown)")
+                
+                # Display filtered logs with enhanced information
+                for i, log_entry in enumerate(filtered_logs):
+                    level = log_entry.get('level', 'INFO')
+                    timestamp = log_entry.get('timestamp', 'Unknown')
+                    timestamp_full = log_entry.get('timestamp_full', 'Unknown')
+                    message = log_entry.get('message', 'No message')
+                    context = log_entry.get('context', '')
+                    data = log_entry.get('data', {})
+                    system_info = log_entry.get('system_info', {})
+                    log_sequence = log_entry.get('log_sequence', i+1)
+                    
+                    # Create expandable log entry
+                    with st.expander(f"#{log_sequence} [{timestamp}] {level}: {message[:60]}{'...' if len(message) > 60 else ''}", expanded=False):
+                        # Basic info
+                        st.write(f"**Full Message:** {message}")
+                        st.write(f"**Level:** {level}")
+                        st.write(f"**Timestamp:** {timestamp} ({timestamp_full})")
+                        if context:
+                            st.write(f"**Context:** {context}")
+                        
+                        # Show detailed data if available
+                        if show_details and data:
+                            st.write("**Data Payload:**")
+                            st.json(data)
+                        
+                        # Show system info for relevant levels
+                        if show_details and system_info and isinstance(system_info, dict):
+                            st.write("**System Information:**")
+                            st.json(system_info)
+                        
+                        # Show stack trace for errors
+                        if show_details and level == "ERROR" and log_entry.get('stack_trace'):
+                            st.write("**Stack Trace:**")
+                            st.code('\n'.join(log_entry['stack_trace'][-5:]))  # Show last 5 stack frames
+                    
+                    # Color coding by level in compact view
+                    if not show_details:
+                        display_msg = f"#{log_sequence} **{timestamp}** [{context}] - {message}"
+                        if level == "ERROR":
+                            st.error(f"🔴 {display_msg}")
+                        elif level == "WARNING":
+                            st.warning(f"🟡 {display_msg}")
+                        elif level == "SUCCESS":
+                            st.success(f"🟢 {display_msg}")
+                        elif level == "DATA":
+                            st.info(f"📊 {display_msg}")
+                        elif level == "SYSTEM":
+                            st.info(f"⚙️ {display_msg}")
+                        else:  # INFO
+                            st.info(f"ℹ️ {display_msg}")
+                    
+                    # Add separator for readability
+                    if i < len(filtered_logs) - 1 and i < 50:  # Limit visible logs for performance
+                        st.divider()
+                    elif i >= 50:
+                        st.info(f"📄 Showing first 50 of {len(filtered_logs)} filtered logs. Use filters to narrow results.")
+                        break
+        else:
+            st.info("📝 No debug logs available yet. Logs will appear here as the application runs.")
+            st.markdown("""
+            **Debug logs capture:**
+            - 🔴 **ERROR**: Critical failures and exceptions
+            - 🟡 **WARNING**: Potential issues and fallbacks
+            - 🟢 **SUCCESS**: Successful operations
+            - 📊 **DATA**: Data loading and processing info
+            - ⚙️ **SYSTEM**: System status and configuration
+            - ℹ️ **INFO**: General application information
+            """)
+        
+        # Auto-refresh functionality
+        if auto_refresh:
+            st.rerun()
+
 if __name__ == "__main__":
     main()
