@@ -485,6 +485,7 @@ def main():
     st.sidebar.title("Navigation")
     tabs = [
         "Why Bitcoin?",
+        "Bitcoin's Future and Destiny",
         "Bitcoin OHLC",
         "Mempool Data",
         "Portfolio Value",
@@ -542,6 +543,16 @@ def main():
         Bitcoin is more than just a cryptocurrency—it's a paradigm shift towards decentralized, sound money. 
         Its unique combination of scarcity, security, and decentralization makes it the most powerful store of value in human history.
         """)
+
+    elif page == "Bitcoin's Future and Destiny":
+        st.header("🔮 Bitcoin's Future and Destiny")
+        
+        # Content will be added here based on your requirements
+        st.info("📝 Content for this page will be added shortly...")
+        
+        # Placeholder structure ready for your content
+        st.subheader("🚀 The Road Ahead")
+        st.markdown("*Content coming soon...*")
 
     elif page == "Bitcoin OHLC":
         st.header("Bitcoin Weekly OHLC Data")
