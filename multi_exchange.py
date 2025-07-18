@@ -6,17 +6,20 @@ Optimized for Streamlit Community Cloud reliability.
 
 def get_multi_exchange_prices():
     """
-    Attempts to fetch prices from multiple exchanges with fallback.
+    Attempts to fetch prices from multiple exchanges with parallel processing.
+    Uses concurrent.futures for faster response times.
     Priority order: Binance -> KuCoin -> Coinbase -> CoinGecko
     Returns the best available price data.
     """
     import sys
     import os
+    import concurrent.futures
+    import time
     
-    print("🔍 DEBUG: Starting get_multi_exchange_prices() function")
+    start_time = time.time()
+    print("� DEBUG: Starting PARALLEL get_multi_exchange_prices() function")
     print(f"🔍 DEBUG: Python executable: {sys.executable}")
     print(f"🔍 DEBUG: Working directory: {os.getcwd()}")
-    print(f"🔍 DEBUG: Python path: {sys.path[:3]}...")  # Show first 3 paths
     
     # Add current directory to path for imports
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -32,9 +35,7 @@ def get_multi_exchange_prices():
         'sources_used': []
     }
     
-    print("🔍 DEBUG: Initialized results dictionary")
-    
-    # Try exchanges in order of preference
+    # Define exchanges with timeout limits for parallel execution
     exchanges = [
         ('Binance', try_binance),
         ('KuCoin', try_kucoin),
@@ -42,55 +43,63 @@ def get_multi_exchange_prices():
         ('CoinGecko', try_coingecko)
     ]
     
-    print(f"🔍 DEBUG: Will try {len(exchanges)} exchanges: {[ex[0] for ex in exchanges]}")
+    print(f"🔍 DEBUG: Will try {len(exchanges)} exchanges in PARALLEL: {[ex[0] for ex in exchanges]}")
     
-    for i, (exchange_name, exchange_func) in enumerate(exchanges):
-        print(f"🔄 DEBUG: Trying exchange {i+1}/{len(exchanges)}: {exchange_name}")
+    # Execute all exchanges in parallel with timeout
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+        # Submit all futures
+        future_to_exchange = {
+            executor.submit(exchange_func): exchange_name 
+            for exchange_name, exchange_func in exchanges
+        }
         
-        try:
-            print(f"🔍 DEBUG: Calling {exchange_name} function...")
-            exchange_result = exchange_func()
+        print("🔄 DEBUG: All exchange requests submitted in parallel")
+        
+        # Collect results as they complete (with timeout)
+        for future in concurrent.futures.as_completed(future_to_exchange, timeout=10):
+            exchange_name = future_to_exchange[future]
             
-            print(f"📊 DEBUG: {exchange_name} returned: {type(exchange_result)}")
-            print(f"📊 DEBUG: {exchange_name} success_count: {exchange_result.get('success_count', 'MISSING')}")
-            print(f"📊 DEBUG: {exchange_name} prices: {exchange_result.get('prices', {})}")
-            
-            if exchange_result['success_count'] > 0:
-                results['sources_used'].append(exchange_name)
-                print(f"✅ DEBUG: {exchange_name} had {exchange_result['success_count']} successful prices")
+            try:
+                print(f"⏱️ DEBUG: {exchange_name} completed")
+                exchange_result = future.result(timeout=5)  # 5s timeout per exchange
                 
-                # Fill in any missing prices
-                for symbol in ['BTC', 'ETH', 'BNB', 'POL']:
-                    if (results['prices'][symbol] is None and 
-                        exchange_result['prices'].get(symbol) is not None):
-                        results['prices'][symbol] = exchange_result['prices'][symbol]
-                        print(f"✅ DEBUG: Got {symbol} price from {exchange_name}: {exchange_result['prices'][symbol]}")
+                print(f"📊 DEBUG: {exchange_name} returned: {type(exchange_result)}")
+                print(f"📊 DEBUG: {exchange_name} success_count: {exchange_result.get('success_count', 'MISSING')}")
                 
-                # Update success count
-                results['success_count'] = len([p for p in results['prices'].values() if p is not None])
-                print(f"📊 DEBUG: Updated total success_count to: {results['success_count']}")
-                
-                # If we have all prices, we can stop
-                if results['success_count'] == 4:
-                    print(f"🎉 DEBUG: All prices obtained! Sources: {', '.join(results['sources_used'])}")
-                    break
-            else:
-                print(f"❌ DEBUG: {exchange_name} had 0 successful prices")
+                if exchange_result['success_count'] > 0:
+                    results['sources_used'].append(exchange_name)
+                    print(f"✅ DEBUG: {exchange_name} had {exchange_result['success_count']} successful prices")
                     
-        except Exception as e:
-            error_msg = f"❌ {exchange_name} failed: {str(e)}"
-            results['errors'].append(error_msg)
-            print(f"❌ DEBUG: {error_msg}")
-            print(f"📋 DEBUG: Exception type: {type(e)}")
-            print(f"📋 DEBUG: Exception details: {repr(e)}")
+                    # Fill in any missing prices
+                    for symbol in ['BTC', 'ETH', 'BNB', 'POL']:
+                        if (results['prices'][symbol] is None and 
+                            exchange_result['prices'].get(symbol) is not None):
+                            results['prices'][symbol] = exchange_result['prices'][symbol]
+                            print(f"✅ DEBUG: Got {symbol} price from {exchange_name}: {exchange_result['prices'][symbol]}")
+                    
+                    # Update success count
+                    results['success_count'] = len([p for p in results['prices'].values() if p is not None])
+                    print(f"📊 DEBUG: Updated total success_count to: {results['success_count']}")
+                else:
+                    print(f"❌ DEBUG: {exchange_name} had 0 successful prices")
+                    
+            except concurrent.futures.TimeoutError:
+                error_msg = f"❌ {exchange_name} timeout (>5s)"
+                results['errors'].append(error_msg)
+                print(f"⏰ DEBUG: {error_msg}")
+            except Exception as e:
+                error_msg = f"❌ {exchange_name} failed: {str(e)}"
+                results['errors'].append(error_msg)
+                print(f"❌ DEBUG: {error_msg}")
     
     # Add any remaining errors for missing prices
     for symbol in ['BTC', 'ETH', 'BNB', 'POL']:
         if results['prices'][symbol] is None:
             error_msg = f"❌ {symbol}: All exchanges failed"
             results['errors'].append(error_msg)
-            print(f"❌ DEBUG: {error_msg}")
     
+    elapsed_time = round((time.time() - start_time) * 1000, 2)
+    print(f"🏁 DEBUG: PARALLEL execution completed in {elapsed_time}ms")
     print(f"🏁 DEBUG: Final results - Success: {results['success_count']}/4, Sources: {results['sources_used']}")
     return results
 

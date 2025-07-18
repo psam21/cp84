@@ -54,11 +54,29 @@ def debug_log(message, level="INFO", context=None, data=None):
         try:
             import psutil
             import platform
+            
+            # Get system info with better error handling
+            platform_info = platform.system()
+            python_ver = platform.python_version()
+            
+            # Try to get memory info with fallback
+            try:
+                process = psutil.Process()
+                memory_mb = round(process.memory_info().rss / 1024 / 1024, 2)
+            except:
+                memory_mb = 'psutil_error'
+            
+            # Try to get CPU info with fallback
+            try:
+                cpu_pct = round(psutil.cpu_percent(interval=0.1), 2)
+            except:
+                cpu_pct = 'psutil_error'
+            
             log_entry['system_info'] = {
-                'platform': platform.system(),
-                'python_version': platform.python_version(),
-                'memory_usage_mb': psutil.Process().memory_info().rss / 1024 / 1024,
-                'cpu_percent': psutil.cpu_percent(interval=None)
+                'platform': platform_info,
+                'python_version': python_ver,
+                'memory_usage_mb': memory_mb,
+                'cpu_percent': cpu_pct
             }
         except ImportError:
             # psutil not available in this environment
@@ -66,11 +84,17 @@ def debug_log(message, level="INFO", context=None, data=None):
             log_entry['system_info'] = {
                 'platform': platform.system(),
                 'python_version': platform.python_version(),
-                'memory_usage_mb': 'unavailable',
-                'cpu_percent': 'unavailable'
+                'memory_usage_mb': 'psutil_not_installed',
+                'cpu_percent': 'psutil_not_installed'
             }
-        except Exception:
-            log_entry['system_info'] = 'unavailable'
+        except Exception as e:
+            import platform
+            log_entry['system_info'] = {
+                'platform': platform.system(),
+                'python_version': platform.python_version(),
+                'memory_usage_mb': f'error_{str(e)[:20]}',
+                'cpu_percent': f'error_{str(e)[:20]}'
+            }
     
     # Add stack trace for errors
     if level == 'ERROR':

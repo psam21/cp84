@@ -8,7 +8,7 @@ import json
 from datetime import datetime, timedelta
 
 class BitcoinMetrics:
-    """Class to fetch and manage Bitcoin metrics from various APIs with enhanced logging"""
+    """Class to fetch and manage Bitcoin metrics with circuit breaker pattern and enhanced logging"""
     
     def __init__(self, debug_logger=None):
         self.headers = {
@@ -20,6 +20,12 @@ class BitcoinMetrics:
         self.debug_log = debug_logger if debug_logger else print
         self.debug_log_api = None
         
+        # Circuit breaker state management
+        self.circuit_breakers = {}
+        self.failure_threshold = 3  # Number of failures before opening circuit
+        self.recovery_timeout = 60  # Seconds before attempting to close circuit
+        self.half_open_max_calls = 1  # Max calls in half-open state
+        
         # Set up API logging if debug_logger is available
         if hasattr(debug_logger, '__module__'):
             try:
@@ -29,8 +35,78 @@ class BitcoinMetrics:
             except ImportError:
                 pass
     
+    def get_circuit_breaker_state(self, api_name):
+        """Get or initialize circuit breaker state for an API"""
+        if api_name not in self.circuit_breakers:
+            self.circuit_breakers[api_name] = {
+                'state': 'CLOSED',  # CLOSED, OPEN, HALF_OPEN
+                'failure_count': 0,
+                'last_failure_time': None,
+                'half_open_calls': 0
+            }
+        return self.circuit_breakers[api_name]
+    
+    def should_allow_request(self, api_name):
+        """Check if request should be allowed based on circuit breaker state"""
+        breaker = self.get_circuit_breaker_state(api_name)
+        
+        if breaker['state'] == 'CLOSED':
+            return True
+        elif breaker['state'] == 'OPEN':
+            # Check if recovery timeout has passed
+            if breaker['last_failure_time']:
+                import time
+                time_since_failure = time.time() - breaker['last_failure_time']
+                if time_since_failure > self.recovery_timeout:
+                    breaker['state'] = 'HALF_OPEN'
+                    breaker['half_open_calls'] = 0
+                    self.debug_log(f"🔄 Circuit breaker for {api_name} moved to HALF_OPEN", "INFO")
+                    return True
+            return False
+        elif breaker['state'] == 'HALF_OPEN':
+            if breaker['half_open_calls'] < self.half_open_max_calls:
+                breaker['half_open_calls'] += 1
+                return True
+            return False
+        
+        return False
+    
+    def record_success(self, api_name):
+        """Record successful API call"""
+        breaker = self.get_circuit_breaker_state(api_name)
+        if breaker['state'] == 'HALF_OPEN':
+            breaker['state'] = 'CLOSED'
+            breaker['failure_count'] = 0
+            breaker['half_open_calls'] = 0
+            self.debug_log(f"✅ Circuit breaker for {api_name} CLOSED (recovered)", "SUCCESS")
+        elif breaker['state'] == 'CLOSED':
+            breaker['failure_count'] = max(0, breaker['failure_count'] - 1)  # Slowly decrease failure count
+    
+    def record_failure(self, api_name):
+        """Record failed API call and update circuit breaker state"""
+        breaker = self.get_circuit_breaker_state(api_name)
+        breaker['failure_count'] += 1
+        
+        import time
+        breaker['last_failure_time'] = time.time()
+        
+        if breaker['failure_count'] >= self.failure_threshold:
+            if breaker['state'] != 'OPEN':
+                breaker['state'] = 'OPEN'
+                self.debug_log(f"🚨 Circuit breaker for {api_name} OPENED (too many failures)", "WARNING")
+        elif breaker['state'] == 'HALF_OPEN':
+            breaker['state'] = 'OPEN'
+            self.debug_log(f"🚨 Circuit breaker for {api_name} reopened from HALF_OPEN", "WARNING")
+    
     def safe_request(self, url, params=None, api_name="Unknown"):
-        """Make a safe API request with comprehensive error handling and logging"""
+        """Make a safe API request with circuit breaker pattern and comprehensive error handling"""
+        
+        # Check circuit breaker state
+        if not self.should_allow_request(api_name):
+            breaker = self.get_circuit_breaker_state(api_name)
+            self.debug_log(f"🚫 Circuit breaker BLOCKED request to {api_name} (state: {breaker['state']})", "WARNING")
+            return None
+        
         import time
         start_time = time.time()
         
@@ -47,6 +123,9 @@ class BitcoinMetrics:
             response.raise_for_status()
             data = response.json()
             
+            # Record success for circuit breaker
+            self.record_success(api_name)
+            
             if self.debug_log_api:
                 self.debug_log_api(api_name, url, "SUCCESS", response_time, f"Status {response.status_code}")
             
@@ -57,6 +136,7 @@ class BitcoinMetrics:
             response_time = round((time.time() - start_time) * 1000, 2)
             error_msg = f"Timeout after {self.timeout}s"
             self.debug_log(f"⏰ {api_name} API timeout: {error_msg}", "ERROR")
+            self.record_failure(api_name)  # Record failure for circuit breaker
             if self.debug_log_api:
                 self.debug_log_api(api_name, url, "TIMEOUT", response_time, None, error_msg)
             return None
@@ -65,6 +145,7 @@ class BitcoinMetrics:
             response_time = round((time.time() - start_time) * 1000, 2)
             error_msg = f"HTTP {response.status_code}: {str(e)}"
             self.debug_log(f"🚨 {api_name} HTTP error: {error_msg}", "ERROR")
+            self.record_failure(api_name)  # Record failure for circuit breaker
             if self.debug_log_api:
                 self.debug_log_api(api_name, url, "HTTP_ERROR", response_time, None, error_msg)
             return None
@@ -73,6 +154,7 @@ class BitcoinMetrics:
             response_time = round((time.time() - start_time) * 1000, 2)
             error_msg = f"Connection failed: {str(e)}"
             self.debug_log(f"🔌 {api_name} connection error: {error_msg}", "ERROR")
+            self.record_failure(api_name)  # Record failure for circuit breaker
             if self.debug_log_api:
                 self.debug_log_api(api_name, url, "CONNECTION_ERROR", response_time, None, error_msg)
             return None
@@ -81,6 +163,7 @@ class BitcoinMetrics:
             response_time = round((time.time() - start_time) * 1000, 2)
             error_msg = f"Invalid JSON response: {str(e)}"
             self.debug_log(f"📄 {api_name} JSON decode error: {error_msg}", "ERROR")
+            self.record_failure(api_name)  # Record failure for circuit breaker
             if self.debug_log_api:
                 self.debug_log_api(api_name, url, "JSON_ERROR", response_time, None, error_msg)
             return None
@@ -89,41 +172,74 @@ class BitcoinMetrics:
             response_time = round((time.time() - start_time) * 1000, 2)
             error_msg = f"Unexpected error: {str(e)}"
             self.debug_log(f"❌ {api_name} API failed: {error_msg}", "ERROR")
+            self.record_failure(api_name)  # Record failure for circuit breaker
             if self.debug_log_api:
                 self.debug_log_api(api_name, url, "ERROR", response_time, None, error_msg)
             return None
     
     def get_price_coindesk(self):
-        """Get Bitcoin price from CoinDesk API with enhanced logging and fallback"""
-        self.debug_log("🏦 Fetching Bitcoin price from CoinDesk...", "INFO")
-        url = "https://api.coindesk.com/v1/bpi/currentprice.json"
-        data = self.safe_request(url, api_name="CoinDesk")
+        """Get Bitcoin price from reliable APIs with enhanced logging and multiple fallbacks"""
+        self.debug_log("💰 Fetching Bitcoin price with multi-source fallback...", "INFO")
         
-        if data and 'bpi' in data and 'USD' in data['bpi']:
+        # Primary: Use CoinGecko (more reliable than CoinDesk)
+        self.debug_log("🦎 Trying CoinGecko as primary source...", "INFO")
+        
+        # Add rate limiting delay to prevent 429 errors
+        import time
+        time.sleep(0.5)  # 500ms delay to respect rate limits
+        
+        url = "https://api.coingecko.com/api/v3/simple/price"
+        params = {'ids': 'bitcoin', 'vs_currencies': 'usd'}
+        data = self.safe_request(url, params, api_name="CoinGecko-Primary")
+        
+        if data and 'bitcoin' in data and 'usd' in data['bitcoin']:
             price_data = {
-                'price_usd': float(data['bpi']['USD']['rate'].replace(',', '')),
-                'last_updated': data.get('time', {}).get('updated', 'Unknown'),
-                'source': 'CoinDesk'
-            }
-            self.debug_log(f"💰 CoinDesk price: ${price_data['price_usd']:,.2f}", "SUCCESS")
-            return price_data
-        
-        # Fallback: Use CoinGecko if CoinDesk fails (DNS issues observed)
-        self.debug_log("🔄 CoinDesk failed, trying CoinGecko fallback...", "WARNING")
-        fallback_url = "https://api.coingecko.com/api/v3/simple/price"
-        fallback_params = {'ids': 'bitcoin', 'vs_currencies': 'usd'}
-        fallback_data = self.safe_request(fallback_url, fallback_params, api_name="CoinGecko-Fallback")
-        
-        if fallback_data and 'bitcoin' in fallback_data and 'usd' in fallback_data['bitcoin']:
-            price_data = {
-                'price_usd': float(fallback_data['bitcoin']['usd']),
+                'price_usd': float(data['bitcoin']['usd']),
                 'last_updated': 'Current',
-                'source': 'CoinGecko (Fallback)'
+                'source': 'CoinGecko'
             }
-            self.debug_log(f"💰 CoinGecko fallback price: ${price_data['price_usd']:,.2f}", "SUCCESS")
+            self.debug_log(f"💰 CoinGecko price: ${price_data['price_usd']:,.2f}", "SUCCESS")
             return price_data
         
-        self.debug_log("❌ Both CoinDesk and CoinGecko price fetching failed", "ERROR")
+        # Fallback 1: Try Binance API (from our multi-exchange system)
+        self.debug_log("🔄 CoinGecko failed, trying Binance fallback...", "WARNING")
+        time.sleep(0.3)  # Rate limiting
+        
+        try:
+            from multi_exchange import get_multi_exchange_prices
+            multi_prices = get_multi_exchange_prices()
+            if multi_prices and 'prices' in multi_prices and 'BTC' in multi_prices['prices']:
+                btc_price = multi_prices['prices']['BTC']
+                if btc_price and btc_price > 0:
+                    price_data = {
+                        'price_usd': float(btc_price),
+                        'last_updated': 'Current',
+                        'source': f"Multi-Exchange ({', '.join(multi_prices.get('sources', []))})"
+                    }
+                    self.debug_log(f"💰 Multi-exchange fallback price: ${price_data['price_usd']:,.2f}", "SUCCESS")
+                    return price_data
+        except Exception as e:
+            self.debug_log(f"⚠️ Multi-exchange fallback failed: {str(e)}", "WARNING")
+        
+        # Fallback 2: Use alternative CoinGecko endpoint
+        self.debug_log("🔄 Trying alternative CoinGecko endpoint...", "WARNING")
+        time.sleep(0.3)  # Rate limiting
+        
+        alt_url = "https://api.coingecko.com/api/v3/coins/bitcoin"
+        alt_data = self.safe_request(alt_url, api_name="CoinGecko-Alternative")
+        
+        if alt_data and 'market_data' in alt_data and 'current_price' in alt_data['market_data']:
+            current_price = alt_data['market_data']['current_price']
+            if 'usd' in current_price:
+                price_data = {
+                    'price_usd': float(current_price['usd']),
+                    'last_updated': alt_data.get('last_updated', 'Unknown'),
+                    'source': 'CoinGecko (Alternative)'
+                }
+                self.debug_log(f"💰 Alternative CoinGecko price: ${price_data['price_usd']:,.2f}", "SUCCESS")
+                return price_data
+        
+        self.debug_log("❌ All Bitcoin price sources failed", "ERROR")
         return None
     
     def get_coingecko_data(self):
@@ -225,16 +341,26 @@ class BitcoinMetrics:
         self.debug_log(f"📊 Fetching {chart_type} chart from Blockchain.info...", "INFO")
         
         # Note: blockchain.info chart APIs have been deprecated/moved
-        # These endpoints now return 404 or redirect to HTML pages
-        self.debug_log(f"⚠️ Blockchain.info chart API deprecated for {chart_type}", "WARNING")
+        """Get chart data with fallback to alternative sources for deprecated endpoints"""
+        self.debug_log(f"📊 Fetching {chart_type} chart data...", "INFO")
         
-        # For now, return None and let alternative data sources handle this
-        # Future enhancement: implement alternative data sources for specific charts
+        # For deprecated charts, use alternative sources first
+        if chart_type in ['hash-rate', 'n-transactions', 'estimated-transaction-volume-usd', 
+                         'miners-revenue', 'transaction-fees-usd', 'mempool-size', 'avg-block-size']:
+            
+            # Try alternative data source first
+            alt_data = self.get_alternative_chart_data(chart_type, timespan)
+            if alt_data:
+                return alt_data
+                
+            self.debug_log(f"⚠️ Blockchain.info chart API deprecated for {chart_type}, trying anyway...", "WARNING")
+        
+        # For completely unavailable charts, return None immediately
         if chart_type in ['n-active-addresses', 'avg-block-time']:
-            self.debug_log(f"❌ Chart {chart_type} unavailable - API endpoint deprecated", "ERROR")
+            self.debug_log(f"❌ Chart {chart_type} unavailable - API endpoint completely deprecated", "ERROR")
             return None
         
-        # Try the old endpoint anyway in case some charts still work
+        # Try the original endpoint as fallback
         url = f"https://api.blockchain.info/charts/{chart_type}"
         params = {'timespan': timespan, 'format': 'json'}
         data = self.safe_request(url, params, api_name=f"Blockchain.info-{chart_type}")
@@ -245,12 +371,83 @@ class BitcoinMetrics:
                 'name': data.get('name', chart_type),
                 'unit': data.get('unit', ''),
                 'description': data.get('description', ''),
-                'source': 'Blockchain.info'
+                'source': 'Blockchain.info (Legacy)'
             }
             self.debug_log(f"📊 Blockchain.info {chart_type}: Got {len(data['values'])} data points", "SUCCESS")
             return chart_result
         
-        self.debug_log(f"❌ Blockchain.info {chart_type} chart failed - invalid data structure", "ERROR")
+        self.debug_log(f"❌ Blockchain.info {chart_type} chart failed - no alternative source available", "ERROR")
+        return None
+    
+    def get_alternative_chart_data(self, chart_type, timespan):
+        """Get chart data from alternative sources for deprecated Blockchain.info endpoints"""
+        import time
+        time.sleep(0.2)  # Rate limiting
+        
+        if chart_type == 'hash-rate':
+            # Try Mempool.space for hash rate data
+            self.debug_log("🔄 Using Mempool.space for hash rate data...", "INFO")
+            url = "https://mempool.space/api/v1/mining/hashrate/pools/1m"
+            data = self.safe_request(url, api_name="Mempool-HashRate")
+            if data and 'hashrates' in data:
+                # Convert to Blockchain.info format
+                values = []
+                for item in data['hashrates'][-30:]:  # Last 30 days
+                    values.append({
+                        'x': item.get('timestamp', 0),
+                        'y': item.get('avgHashrate', 0) / 1e18  # Convert to EH/s
+                    })
+                return {
+                    'values': values,
+                    'name': 'Hash Rate',
+                    'unit': 'EH/s',
+                    'description': 'Bitcoin Network Hash Rate',
+                    'source': 'Mempool.space'
+                }
+        
+        elif chart_type == 'n-transactions':
+            # Use CoinGecko for transaction data
+            self.debug_log("🔄 Using CoinGecko for transaction data...", "INFO")
+            url = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart"
+            params = {'vs_currency': 'usd', 'days': '30'}
+            data = self.safe_request(url, params, api_name="CoinGecko-Transactions")
+            if data and 'total_volumes' in data:
+                # Approximate transactions from volume data
+                values = []
+                for item in data['total_volumes']:
+                    values.append({
+                        'x': int(item[0] / 1000),  # Convert to timestamp
+                        'y': int(item[1] / 50000)  # Rough estimate: volume/50k = transactions
+                    })
+                return {
+                    'values': values,
+                    'name': 'Daily Transactions (Estimated)',
+                    'unit': 'transactions',
+                    'description': 'Estimated daily Bitcoin transactions',
+                    'source': 'CoinGecko (Estimated)'
+                }
+        
+        elif chart_type == 'mempool-size':
+            # Use Mempool.space for mempool data
+            self.debug_log("🔄 Using Mempool.space for mempool size...", "INFO")
+            url = "https://mempool.space/api/mempool"
+            data = self.safe_request(url, api_name="Mempool-Size")
+            if data and 'count' in data:
+                # Return current mempool size as single data point
+                import time
+                current_time = int(time.time())
+                return {
+                    'values': [{
+                        'x': current_time,
+                        'y': data['count']
+                    }],
+                    'name': 'Mempool Size',
+                    'unit': 'transactions',
+                    'description': 'Current mempool transaction count',
+                    'source': 'Mempool.space'
+                }
+        
+        # For other charts, return None to fall back to original source
         return None
     
     def get_bitnodes_data(self):
