@@ -382,6 +382,9 @@ def main():
             debug_log_data_processing("Mempool Info", "API Request", mempool_data, mempool_time)
             debug_log(f"Mempool data loaded in {mempool_time}ms", "SUCCESS", "mempool_loading")
             
+            # Store mempool data in session state for other pages to access
+            st.session_state.mempool_data = mempool_data
+            
             # Load mempool stats with timing
             stats_start = time.time()
             debug_log("Loading mempool stats...", "INFO", "mempool_stats")
@@ -1004,11 +1007,16 @@ def main():
                 with mempool_col1:
                     # Get mempool data (reuse existing functionality)
                     try:
-                        from app import cached_get_mempool_info
-                        mempool_data = cached_get_mempool_info()
+                        # Use the already available mempool_data from session state
+                        mempool_info = st.session_state.get('mempool_data', {})
+                        if not mempool_info or 'error' in mempool_info:
+                            # Fallback: call the function directly since it's in the same module
+                            mempool_info = cached_get_mempool_info()
+                            # Store it back in session state for future use
+                            st.session_state.mempool_data = mempool_info
                         
-                        if 'error' not in mempool_data and 'fees' in mempool_data:
-                            fees = mempool_data['fees']
+                        if 'error' not in mempool_info and 'fees' in mempool_info:
+                            fees = mempool_info['fees']
                             
                             # Create fee progression chart
                             fee_labels = ['Economy', 'Low Priority', 'Medium Priority', 'High Priority']
@@ -1052,8 +1060,8 @@ def main():
                 with mempool_col2:
                     # Mempool size visualization
                     try:
-                        if 'error' not in mempool_data and 'mempool_blocks' in mempool_data:
-                            blocks_data = mempool_data['mempool_blocks'][:10]
+                        if 'error' not in mempool_info and 'mempool_blocks' in mempool_info:
+                            blocks_data = mempool_info['mempool_blocks'][:10]
                             
                             # Create mempool blocks chart
                             fig_mempool = go.Figure()
@@ -3023,6 +3031,7 @@ def main():
             logs = st.session_state.debug_logs
             
             # Calculate session metrics
+            from datetime import datetime  # Local import to ensure availability
             total_logs = len(logs)
             session_start = logs[0]['timestamp_full'] if logs else 'Unknown'
             current_time = datetime.now().isoformat()
