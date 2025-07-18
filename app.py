@@ -1790,6 +1790,9 @@ def main():
                         st.error(f"❌ Missing required columns: {missing_columns}")
                         st.info("Available columns: " + ", ".join(year_data.columns.tolist()))
                     else:
+                        # Import plotly for chart creation
+                        import plotly.graph_objects as go
+                        
                         fig = go.Figure(data=[go.Candlestick(x=year_data.index,
                             open=year_data['open'],
                             high=year_data['high'],
