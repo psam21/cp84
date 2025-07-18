@@ -1701,7 +1701,9 @@ def main():
                 st.divider()
                 col_time, col_sources = st.columns(2)
                 with col_time:
-                    st.caption(f"🕐 Data refreshed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                    # Use the imported datetime from the section level
+                    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    st.caption(f"🕐 Data refreshed: {current_time}")
                 with col_sources:
                     st.caption("📡 Sources: CoinGecko, Blockchain.info, Historical Halving Data")
                 
