@@ -518,37 +518,6 @@ def main():
         Bitcoin is more than just a cryptocurrency—it's a paradigm shift towards decentralized, sound money. 
         Its unique combination of scarcity, security, and decentralization makes it the most powerful store of value in human history.
         """)
-        
-        # Add some Bitcoin stats using cached data with API transparency
-        st.subheader("📊 Live Bitcoin Metrics")
-        
-        if binance_prices.get('BTC') and binance_prices['BTC'] > 0:
-            metrics_cols = st.columns(3)
-            
-            try:
-                current_btc_price = binance_prices['BTC']
-                metrics_cols[0].metric("Current Price", f"${current_btc_price:,.2f}")
-                
-                # Calculate market cap with more accurate circulating supply (as of 2025)
-                circulating_supply = 19_800_000  # More accurate current circulating supply
-                market_cap = current_btc_price * circulating_supply
-                metrics_cols[1].metric("Market Cap", f"${market_cap/1e12:.2f}T")
-                
-                # Show accurate scarcity - much less remaining now
-                remaining_btc = 21_000_000 - circulating_supply
-                metrics_cols[2].metric("Remaining to Mine", f"{remaining_btc:,.0f} BTC")
-                
-            except Exception as e:
-                st.error(f"❌ Error calculating Bitcoin metrics: {e}")
-        else:
-            st.error("❌ Bitcoin Price API Failed")
-            st.info("💡 Live Bitcoin metrics unavailable due to API failure. The price data from Binance API could not be retrieved.")
-            
-            # Show a retry button
-            if st.button("🔄 Retry Bitcoin Price API", key="retry_btc_main"):
-                cached_get_crypto_prices.clear()
-                cached_get_binance_prices.clear()
-                st.rerun()
 
     elif page == "Bitcoin OHLC":
         st.header("Bitcoin Weekly OHLC Data")
@@ -768,7 +737,7 @@ def main():
                     textposition='auto'
                 )])
                 fig_pie.update_layout(
-                    height=300,
+                    height=480,
                     margin=dict(l=0, r=0, t=20, b=0),
                     showlegend=False,
                     plot_bgcolor='rgba(0,0,0,0)',
