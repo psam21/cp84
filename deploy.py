@@ -1220,6 +1220,33 @@ def main():
                     
                     return
                 
+                elif arg == '--all' or arg == '-a':
+                    # Force deploy all files mode (bypasses git status detection)
+                    logger.operation_start("Force deploy all files mode (CLI)")
+                    print(f"{Colors.WARNING}⚡ Force deploy ALL files mode (bypassing git status)...{Colors.ENDC}")
+                    
+                    try:
+                        # Skip git status check, force stage everything
+                        logger.info("Force deploy: staging all files without status check")
+                        
+                        if (git_auto.stage_files(stage_all=True) and 
+                            git_auto.commit_changes(auto_message=True) and 
+                            git_auto.push_changes()):
+                            
+                            print(f"{Colors.OKGREEN}✅ Force deployment completed successfully!{Colors.ENDC}")
+                            logger.operation_end("Force deploy all files mode (CLI)", True)
+                        else:
+                            logger.operation_end("Force deploy all files mode (CLI)", False)
+                            sys.exit(1)
+                            
+                    except Exception as e:
+                        logger.operation_end("Force deploy all files mode (CLI)", False, {'error': str(e)})
+                        logger.error("Force deployment failed", exception=e)
+                        print(f"{Colors.FAIL}❌ Force deployment failed: {e}{Colors.ENDC}")
+                        sys.exit(1)
+                    
+                    return
+                
                 elif arg == '--status' or arg == '-s':
                     # Status only mode
                     logger.operation_start("Status check mode (CLI)")
@@ -1239,6 +1266,7 @@ def main():
                     print(f"{Colors.OKCYAN}Usage:{Colors.ENDC}")
                     print(f"  python deploy.py           - Interactive mode")
                     print(f"  python deploy.py --quick   - Quick deploy all changes")
+                    print(f"  python deploy.py --all     - Force deploy ALL files (bypass git status)")
                     print(f"  python deploy.py --status  - Show git status only")
                     print(f"  python deploy.py --help    - Show this help")
                     print(f"\n{Colors.OKCYAN}Features:{Colors.ENDC}")
