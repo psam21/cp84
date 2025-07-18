@@ -971,64 +971,231 @@ def main():
             
             # Beautiful single-row portfolio display with equally spaced boxes
             st.subheader("� Portfolio Overview")
-            portfolio_cols = st.columns(7)
+            # Beautiful compact portfolio display with custom styling
+            st.markdown("""
+            <style>
+            .portfolio-container {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+                margin: 10px 0;
+                padding: 12px;
+                background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+                border-radius: 12px;
+                box-shadow: 0 3px 12px rgba(0,0,0,0.1);
+            }
+            .portfolio-box {
+                flex: 1;
+                min-width: 120px;
+                max-width: 160px;
+                background: rgba(255,255,255,0.95);
+                border-radius: 8px;
+                padding: 8px 6px;
+                text-align: center;
+                box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+                transition: transform 0.2s ease;
+            }
+            .portfolio-box:hover {
+                transform: translateY(-1px);
+                box-shadow: 0 3px 10px rgba(0,0,0,0.15);
+            }
+            .portfolio-emoji {
+                font-size: 16px;
+                margin-bottom: 2px;
+                display: block;
+            }
+            .portfolio-label {
+                font-size: 10px;
+                color: #666;
+                margin: 1px 0;
+                font-weight: 500;
+                line-height: 1;
+            }
+            .portfolio-value {
+                font-size: 13px;
+                font-weight: bold;
+                color: #2c3e50;
+                margin: 2px 0;
+                line-height: 1;
+            }
+            .portfolio-amount {
+                font-size: 9px;
+                color: #7f8c8d;
+                margin: 0;
+                line-height: 1;
+            }
+            .portfolio-total {
+                background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+                color: white;
+            }
+            .portfolio-total .portfolio-label,
+            .portfolio-total .portfolio-value,
+            .portfolio-total .portfolio-amount {
+                color: white;
+            }
+            @media (max-width: 768px) {
+                .portfolio-container {
+                    gap: 3px;
+                    padding: 8px;
+                }
+                .portfolio-box {
+                    min-width: 95px;
+                    padding: 6px 4px;
+                }
+                .portfolio-value {
+                    font-size: 11px;
+                }
+                .portfolio-label {
+                    font-size: 9px;
+                }
+                .portfolio-amount {
+                    font-size: 8px;
+                }
+            }
+            </style>
+            """, unsafe_allow_html=True)
             
-            # BTC Value
-            with portfolio_cols[0]:
-                if btc_value is not None:
-                    st.metric("₿ Bitcoin", f"${btc_value:,.2f}", 
-                             delta=f"{btc_amount:.8f} BTC" if btc_amount > 0 else None)
-                else:
-                    st.metric("₿ Bitcoin", "API Failed", delta="Price unavailable")
+            # Generate portfolio display content
+            usdt_inr_rate = 83.50
             
-            # ETH Value  
-            with portfolio_cols[1]:
-                if eth_value is not None:
-                    st.metric("⟠ Ethereum", f"${eth_value:,.2f}", 
-                             delta=f"{eth_amount:.4f} ETH" if eth_amount > 0 else None)
-                else:
-                    st.metric("⟠ Ethereum", "API Failed", delta="Price unavailable")
+            # Create individual asset boxes
+            portfolio_html = '<div class="portfolio-container">'
             
-            # BNB Value
-            with portfolio_cols[2]:
-                if bnb_value is not None:
-                    st.metric("🔸 BNB", f"${bnb_value:,.2f}", 
-                             delta=f"{bnb_amount:.4f} BNB" if bnb_amount > 0 else None)
-                else:
-                    st.metric("🔸 BNB", "API Failed", delta="Price unavailable")
+            # Bitcoin box
+            if btc_value is not None:
+                portfolio_html += f'''
+                <div class="portfolio-box">
+                    <div class="portfolio-emoji">₿</div>
+                    <div class="portfolio-label">Bitcoin Value</div>
+                    <div class="portfolio-value">${btc_value:,.2f}</div>
+                    <div class="portfolio-amount">{btc_amount:.8f} BTC</div>
+                </div>'''
+            else:
+                portfolio_html += f'''
+                <div class="portfolio-box">
+                    <div class="portfolio-emoji">₿</div>
+                    <div class="portfolio-label">Bitcoin Value</div>
+                    <div class="portfolio-value">API Failed</div>
+                    <div class="portfolio-amount">{btc_amount:.8f} BTC</div>
+                </div>'''
             
-            # POL Value
-            with portfolio_cols[3]:
-                if pol_value is not None:
-                    st.metric("🔷 POL", f"${pol_value:,.2f}", 
-                             delta=f"{pol_amount:.2f} POL" if pol_amount > 0 else None)
-                else:
-                    st.metric("🔷 POL", "API Failed", delta="Price unavailable")
+            # Ethereum box
+            if eth_value is not None:
+                portfolio_html += f'''
+                <div class="portfolio-box">
+                    <div class="portfolio-emoji">⟠</div>
+                    <div class="portfolio-label">Ethereum Value</div>
+                    <div class="portfolio-value">${eth_value:,.2f}</div>
+                    <div class="portfolio-amount">{eth_amount:.4f} ETH</div>
+                </div>'''
+            else:
+                portfolio_html += f'''
+                <div class="portfolio-box">
+                    <div class="portfolio-emoji">⟠</div>
+                    <div class="portfolio-label">Ethereum Value</div>
+                    <div class="portfolio-value">API Failed</div>
+                    <div class="portfolio-amount">{eth_amount:.4f} ETH</div>
+                </div>'''
             
-            # USD Total
-            with portfolio_cols[4]:
-                if total_value > 0:
-                    st.metric("💵 USD Total", f"${total_value:,.2f}",
-                             delta=f"From {len(valid_values)}/4 assets" if failed_apis else None)
-                else:
-                    st.metric("💵 USD Total", "No Valid Prices")
+            # BNB box
+            if bnb_value is not None:
+                portfolio_html += f'''
+                <div class="portfolio-box">
+                    <div class="portfolio-emoji">🔸</div>
+                    <div class="portfolio-label">BNB Value</div>
+                    <div class="portfolio-value">${bnb_value:,.2f}</div>
+                    <div class="portfolio-amount">{bnb_amount:.4f} BNB</div>
+                </div>'''
+            else:
+                portfolio_html += f'''
+                <div class="portfolio-box">
+                    <div class="portfolio-emoji">🔸</div>
+                    <div class="portfolio-label">BNB Value</div>
+                    <div class="portfolio-value">API Failed</div>
+                    <div class="portfolio-amount">{bnb_amount:.4f} BNB</div>
+                </div>'''
             
-            # INR Total
-            with portfolio_cols[5]:
-                usdt_inr_rate = 83.50
-                if total_value > 0:
-                    st.metric("🇮🇳 INR Total", f"₹{total_value * usdt_inr_rate:,.0f}")
-                else:
-                    st.metric("🇮🇳 INR Total", "No Valid Prices")
+            # POL box
+            if pol_value is not None:
+                portfolio_html += f'''
+                <div class="portfolio-box">
+                    <div class="portfolio-emoji">🔷</div>
+                    <div class="portfolio-label">POL Value</div>
+                    <div class="portfolio-value">${pol_value:,.2f}</div>
+                    <div class="portfolio-amount">{pol_amount:.2f} POL</div>
+                </div>'''
+            else:
+                portfolio_html += f'''
+                <div class="portfolio-box">
+                    <div class="portfolio-emoji">🔷</div>
+                    <div class="portfolio-label">POL Value</div>
+                    <div class="portfolio-value">API Failed</div>
+                    <div class="portfolio-amount">{pol_amount:.2f} POL</div>
+                </div>'''
             
-            # BTC Equivalent
-            with portfolio_cols[6]:
-                if total_value > 0 and btc_price and btc_price > 0:
-                    st.metric("₿ BTC Equiv", f"₿{total_value / btc_price:.8f}")
-                elif btc_price is None or btc_price <= 0:
-                    st.metric("₿ BTC Equiv", "BTC API Failed")
+            # Total value boxes with special styling
+            if total_value > 0:
+                # USD Total
+                portfolio_html += f'''
+                <div class="portfolio-box portfolio-total">
+                    <div class="portfolio-emoji">💵</div>
+                    <div class="portfolio-label">USD Value</div>
+                    <div class="portfolio-value">${total_value:,.2f}</div>
+                    <div class="portfolio-amount">{len(valid_values)}/4 Assets</div>
+                </div>'''
+                
+                # INR Total
+                portfolio_html += f'''
+                <div class="portfolio-box portfolio-total">
+                    <div class="portfolio-emoji">🇮🇳</div>
+                    <div class="portfolio-label">INR Value</div>
+                    <div class="portfolio-value">₹{total_value * usdt_inr_rate:,.0f}</div>
+                    <div class="portfolio-amount">@ ₹{usdt_inr_rate}/USD</div>
+                </div>'''
+                
+                # BTC Equivalent
+                if btc_price and btc_price > 0:
+                    portfolio_html += f'''
+                    <div class="portfolio-box portfolio-total">
+                        <div class="portfolio-emoji">₿</div>
+                        <div class="portfolio-label">BTC Equivalent</div>
+                        <div class="portfolio-value">₿{total_value / btc_price:.8f}</div>
+                        <div class="portfolio-amount">@ ${btc_price:,.0f}/BTC</div>
+                    </div>'''
                 else:
-                    st.metric("₿ BTC Equiv", "No Valid Prices")
+                    portfolio_html += '''
+                    <div class="portfolio-box">
+                        <div class="portfolio-emoji">₿</div>
+                        <div class="portfolio-label">BTC Equivalent</div>
+                        <div class="portfolio-value">BTC API Failed</div>
+                        <div class="portfolio-amount">Price unavailable</div>
+                    </div>'''
+            else:
+                # No valid prices fallback
+                portfolio_html += '''
+                <div class="portfolio-box">
+                    <div class="portfolio-emoji">💵</div>
+                    <div class="portfolio-label">USD Value</div>
+                    <div class="portfolio-value">No Valid Prices</div>
+                    <div class="portfolio-amount">Check APIs</div>
+                </div>
+                <div class="portfolio-box">
+                    <div class="portfolio-emoji">🇮🇳</div>
+                    <div class="portfolio-label">INR Value</div>
+                    <div class="portfolio-value">No Valid Prices</div>
+                    <div class="portfolio-amount">Check APIs</div>
+                </div>
+                <div class="portfolio-box">
+                    <div class="portfolio-emoji">₿</div>
+                    <div class="portfolio-label">BTC Equivalent</div>
+                    <div class="portfolio-value">No Valid Prices</div>
+                    <div class="portfolio-amount">Check APIs</div>
+                </div>'''
+            
+            portfolio_html += '</div>'
+            
+            # Display the beautiful portfolio overview
+            st.markdown(portfolio_html, unsafe_allow_html=True)
         
         except Exception as e:
             st.error(f"❌ Error calculating portfolio values: {e}")
