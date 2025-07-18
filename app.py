@@ -998,43 +998,46 @@ def main():
             }
             .portfolio-box {
                 flex: 1;
-                min-width: 120px;
-                max-width: 160px;
+                min-width: 140px;
+                max-width: 200px;
                 background: rgba(255,255,255,0.95);
-                border-radius: 8px;
-                padding: 8px 6px;
+                border-radius: 10px;
+                padding: 12px 8px;
                 text-align: center;
-                box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-                transition: transform 0.2s ease;
+                box-shadow: 0 3px 8px rgba(0,0,0,0.12);
+                transition: transform 0.3s ease;
+                margin: 0 2px;
             }
             .portfolio-box:hover {
-                transform: translateY(-1px);
-                box-shadow: 0 3px 10px rgba(0,0,0,0.15);
+                transform: translateY(-2px);
+                box-shadow: 0 5px 15px rgba(0,0,0,0.2);
             }
             .portfolio-emoji {
-                font-size: 16px;
-                margin-bottom: 2px;
+                font-size: 20px;
+                margin-bottom: 4px;
                 display: block;
             }
             .portfolio-label {
-                font-size: 10px;
-                color: #666;
-                margin: 1px 0;
-                font-weight: 500;
-                line-height: 1;
+                font-size: 11px;
+                color: #555;
+                margin: 2px 0;
+                font-weight: 600;
+                line-height: 1.2;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
             }
             .portfolio-value {
-                font-size: 13px;
+                font-size: 16px;
                 font-weight: bold;
                 color: #2c3e50;
-                margin: 2px 0;
-                line-height: 1;
+                margin: 4px 0;
+                line-height: 1.2;
             }
             .portfolio-amount {
-                font-size: 9px;
+                font-size: 10px;
                 color: #7f8c8d;
                 margin: 0;
-                line-height: 1;
+                line-height: 1.2;
             }
             .portfolio-total {
                 background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
@@ -1110,8 +1113,32 @@ def main():
                         <div class="portfolio-value">BTC API Failed</div>
                         <div class="portfolio-amount">Price unavailable</div>
                     </div>'''
+                
+                # Asset Distribution (4th box to fill the space)
+                non_zero_assets = sum(1 for amount in [btc_amount, eth_amount, bnb_amount, pol_amount] if amount > 0)
+                largest_asset = "N/A"
+                largest_percentage = 0
+                
+                if total_value > 0:
+                    asset_values = {
+                        'BTC': btc_value if btc_value else 0,
+                        'ETH': eth_value if eth_value else 0,
+                        'BNB': bnb_value if bnb_value else 0,
+                        'POL': pol_value if pol_value else 0
+                    }
+                    largest_asset = max(asset_values, key=asset_values.get)
+                    largest_percentage = (asset_values[largest_asset] / total_value) * 100
+                
+                portfolio_html += f'''
+                <div class="portfolio-box portfolio-total">
+                    <div class="portfolio-emoji">📊</div>
+                    <div class="portfolio-label">Portfolio Stats</div>
+                    <div class="portfolio-value">{non_zero_assets}/4 Assets</div>
+                    <div class="portfolio-amount">Largest: {largest_asset} ({largest_percentage:.1f}%)</div>
+                </div>'''
             else:
-                # No valid prices fallback
+                # No valid prices fallback (4 boxes for consistency)
+                portfolio_html = '<div class="portfolio-container">'
                 portfolio_html += '''
                 <div class="portfolio-box">
                     <div class="portfolio-emoji">💵</div>
@@ -1130,6 +1157,12 @@ def main():
                     <div class="portfolio-label">BTC Equivalent</div>
                     <div class="portfolio-value">No Valid Prices</div>
                     <div class="portfolio-amount">Check APIs</div>
+                </div>
+                <div class="portfolio-box">
+                    <div class="portfolio-emoji">📊</div>
+                    <div class="portfolio-label">Portfolio Stats</div>
+                    <div class="portfolio-value">Check APIs</div>
+                    <div class="portfolio-amount">Price data needed</div>
                 </div>'''
             
             portfolio_html += '</div>'
