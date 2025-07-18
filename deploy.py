@@ -371,14 +371,14 @@ class GitAutomation:
             return False
     
     def show_diffs(self, files: List[str] = None) -> bool:
-        """Show git diffs for specified files or all modified files with detailed logging"""
+        """Show git diffs for specified files or all modified/staged files with detailed logging"""
         try:
             self.logger.operation_start("Show file diffs")
-            files_to_diff = files or self.modified_files
+            files_to_diff = files or (self.modified_files + self.staged_files)
             
             if not files_to_diff:
-                self.print_status("ℹ️ No modified files to show diffs for", Colors.OKCYAN)
-                self.logger.info("No files to diff", {'requested_files': files, 'modified_files': self.modified_files})
+                self.print_status("ℹ️ No modified or staged files to show diffs for", Colors.OKCYAN)
+                self.logger.info("No files to diff", {'requested_files': files, 'modified_files': self.modified_files, 'staged_files': self.staged_files})
                 return True
             
             self.print_status(f"📋 Showing differences for {len(files_to_diff)} files...", Colors.HEADER)
@@ -393,16 +393,25 @@ class GitAutomation:
             
             for file in files_to_diff:
                 try:
-                    print(f"\n{Colors.BOLD}{Colors.UNDERLINE}📄 Diff for {file}:{Colors.ENDC}")
-                    self.logger.debug(f"🔍 Getting diff for file: {file}")
+                    # Determine if file is staged or modified
+                    is_staged = file in self.staged_files
+                    is_modified = file in self.modified_files
+                    
+                    status_text = "📦 Staged" if is_staged else "🔄 Modified"
+                    print(f"\n{Colors.BOLD}{Colors.UNDERLINE}📄 Diff for {file} ({status_text}):{Colors.ENDC}")
+                    self.logger.debug(f"🔍 Getting diff for file: {file} (staged: {is_staged})")
+                    
+                    # Choose diff command based on file status
+                    diff_cmd = ["git", "diff", "--staged", file] if is_staged else ["git", "diff", file]
+                    stat_cmd = ["git", "diff", "--staged", "--stat", file] if is_staged else ["git", "diff", "--stat", file]
                     
                     # Get diff with statistics
-                    success, diff_output = self.run_command(["git", "diff", "--stat", file])
+                    success, diff_output = self.run_command(stat_cmd)
                     if success and diff_output:
                         print(f"  {Colors.OKCYAN}📊 Stats: {diff_output}{Colors.ENDC}")
                     
                     # Get actual diff content
-                    success, diff_content = self.run_command(["git", "diff", file])
+                    success, diff_content = self.run_command(diff_cmd)
                     
                     if not success:
                         print(f"  {Colors.FAIL}❌ Failed to get diff for {file}: {diff_content}{Colors.ENDC}")
@@ -1012,10 +1021,20 @@ def interactive_menu(git_auto: GitAutomation) -> bool:
                         
                         # Step 2: Show brief diff summary
                         print(f"\n{Colors.BOLD}📋 Quick diff summary:{Colors.ENDC}")
-                        for file in git_auto.modified_files[:3]:  # Show first 3 files only
-                            print(f"  • {Colors.WARNING}{file}{Colors.ENDC}")
-                        if len(git_auto.modified_files) > 3:
-                            print(f"  • {Colors.OKCYAN}... and {len(git_auto.modified_files) - 3} more files{Colors.ENDC}")
+                        
+                        # Show both modified and staged files
+                        all_changed_files = git_auto.modified_files + git_auto.staged_files
+                        if all_changed_files:
+                            for file in all_changed_files[:3]:  # Show first 3 files only
+                                status_indicator = "🔄" if file in git_auto.modified_files else "✅"
+                                print(f"  {status_indicator} {Colors.WARNING}{file}{Colors.ENDC}")
+                            if len(all_changed_files) > 3:
+                                print(f"  • {Colors.OKCYAN}... and {len(all_changed_files) - 3} more files{Colors.ENDC}")
+                            
+                            # Show actual diffs for the files
+                            git_auto.show_diffs(all_changed_files)
+                        else:
+                            print(f"  {Colors.OKCYAN}No changes to display{Colors.ENDC}")
                         
                         # Step 3: Confirm and stage all
                         try:

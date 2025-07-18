@@ -793,25 +793,6 @@ def main():
         # Initialize portfolio in session state
         initialize_portfolio_session()
         
-        # Enhanced portfolio management with session state
-        st.subheader("💾 Portfolio Management")
-        load_col, clear_col, spacer = st.columns([1, 1, 1])
-        
-        with load_col:
-            if st.button("📂 Reset to Default", type="secondary", use_container_width=True):
-                reset_to_default_portfolio()
-                st.success("✅ Reset to default portfolio")
-                st.rerun()
-        
-        with clear_col:
-            if st.button("�️ Clear All", type="primary", use_container_width=True):
-                clear_portfolio()
-                st.success("✅ Cleared all holdings")
-                st.rerun()
-        
-        st.markdown("<br>", unsafe_allow_html=True)
-        
-        # Enhanced input layout with crypto icons and live prices
         st.subheader("🪙 Asset Holdings")
         
         # Add price refresh button with transparent status
@@ -1200,6 +1181,22 @@ def main():
         except Exception as e:
             st.error(f"❌ Error calculating portfolio values: {e}")
             st.info("🔄 Please try refreshing prices or check API connectivity.")
+        
+        # Enhanced portfolio management with session state
+        st.subheader("💾 Portfolio Management")
+        load_col, clear_col, spacer = st.columns([1, 1, 1])
+        
+        with load_col:
+            if st.button("📂 Reset to Default", type="secondary", use_container_width=True):
+                reset_to_default_portfolio()
+                st.success("✅ Reset to default portfolio")
+                st.rerun()
+        
+        with clear_col:
+            if st.button("🗑️ Clear All", type="primary", use_container_width=True):
+                clear_portfolio()
+                st.success("✅ Cleared all holdings")
+                st.rerun()
 
     elif page == "Bitcoin Metrics":
         st.header("📊 Bitcoin Metrics Dashboard")
