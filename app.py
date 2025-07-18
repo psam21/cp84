@@ -2466,8 +2466,9 @@ def main():
     elif page == "Bitcoin Metrics":
         st.header("📊 Bitcoin Metrics Dashboard")
         
-        # Import plotly at the beginning to ensure it's available throughout the section
+        # Import required modules for this section
         import plotly.graph_objects as go
+        from datetime import datetime, timedelta
         
         # Add cache for metrics with 5-minute TTL
         @st.cache_data(ttl=300)
