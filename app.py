@@ -969,69 +969,66 @@ def main():
                 st.error(f"❌ Portfolio calculation incomplete: {', '.join(failed_apis)} price APIs failed")
                 st.info("💡 Values shown are partial calculations. Use 'Force Refresh Prices' button above to retry failed APIs.")
             
-            # Create main layout - compact but rich
-            main_col1, main_col2 = st.columns([1, 1])
+            # Beautiful single-row portfolio display with equally spaced boxes
+            st.subheader("� Portfolio Overview")
+            portfolio_cols = st.columns(7)
             
-            with main_col1:
-                # Enhanced portfolio values with API status
-                st.subheader("💰 Your Asset Values")
-                value_row1 = st.columns(2)
-                
-                # BTC Value
+            # BTC Value
+            with portfolio_cols[0]:
                 if btc_value is not None:
-                    value_row1[0].metric("₿ Bitcoin Value", f"${btc_value:,.2f}", 
-                                       delta=f"{btc_amount:.8f} BTC" if btc_amount > 0 else None)
+                    st.metric("₿ Bitcoin", f"${btc_value:,.2f}", 
+                             delta=f"{btc_amount:.8f} BTC" if btc_amount > 0 else None)
                 else:
-                    value_row1[0].metric("₿ Bitcoin Value", "API Failed", 
-                                       delta="Price unavailable")
-                
-                # ETH Value  
-                if eth_value is not None:
-                    value_row1[1].metric("⟠ Ethereum Value", f"${eth_value:,.2f}", 
-                                       delta=f"{eth_amount:.4f} ETH" if eth_amount > 0 else None)
-                else:
-                    value_row1[1].metric("⟠ Ethereum Value", "API Failed",
-                                       delta="Price unavailable")
-                
-                value_row2 = st.columns(2)
-                
-                # BNB Value
-                if bnb_value is not None:
-                    value_row2[0].metric("🔸 BNB Value", f"${bnb_value:,.2f}", 
-                                       delta=f"{bnb_amount:.4f} BNB" if bnb_amount > 0 else None)
-                else:
-                    value_row2[0].metric("� BNB Value", "API Failed",
-                                       delta="Price unavailable")
-                
-                # POL Value
-                if pol_value is not None:
-                    value_row2[1].metric("🔷 POL Value", f"${pol_value:,.2f}", 
-                                       delta=f"{pol_amount:.2f} POL" if pol_amount > 0 else None)
-                else:
-                    value_row2[1].metric("🔷 POL Value", "API Failed",
-                                       delta="Price unavailable")
+                    st.metric("₿ Bitcoin", "API Failed", delta="Price unavailable")
             
-            with main_col2:
-                # Enhanced total value section with API transparency
-                st.subheader("🎯 Total Portfolio Value")
-                usdt_inr_rate = 83.50
-                
-                if failed_apis:
-                    st.warning(f"⚠️ Partial calculation - {len(failed_apis)} API(s) failed")
-                
-                total_row = st.columns(1)
-                if total_value > 0:
-                    st.metric("💵 USD Value", f"${total_value:,.2f}",
-                             delta=f"From {len(valid_values)}/4 assets" if failed_apis else None)
-                    st.metric("🇮🇳 INR Value", f"₹{total_value * usdt_inr_rate:,.2f}")
-                    if btc_price and btc_price > 0:
-                        st.metric("₿ BTC Equivalent", f"₿{total_value / btc_price:.8f}")
-                    else:
-                        st.metric("₿ BTC Equivalent", "BTC API Failed")
+            # ETH Value  
+            with portfolio_cols[1]:
+                if eth_value is not None:
+                    st.metric("⟠ Ethereum", f"${eth_value:,.2f}", 
+                             delta=f"{eth_amount:.4f} ETH" if eth_amount > 0 else None)
                 else:
-                    st.metric("💵 USD Value", "No Valid Prices")
-                    st.metric("🇮🇳 INR Value", "No Valid Prices")
-                    st.metric("₿ BTC Equivalent", "APIs Failed")
+                    st.metric("⟠ Ethereum", "API Failed", delta="Price unavailable")
+            
+            # BNB Value
+            with portfolio_cols[2]:
+                if bnb_value is not None:
+                    st.metric("🔸 BNB", f"${bnb_value:,.2f}", 
+                             delta=f"{bnb_amount:.4f} BNB" if bnb_amount > 0 else None)
+                else:
+                    st.metric("🔸 BNB", "API Failed", delta="Price unavailable")
+            
+            # POL Value
+            with portfolio_cols[3]:
+                if pol_value is not None:
+                    st.metric("🔷 POL", f"${pol_value:,.2f}", 
+                             delta=f"{pol_amount:.2f} POL" if pol_amount > 0 else None)
+                else:
+                    st.metric("🔷 POL", "API Failed", delta="Price unavailable")
+            
+            # USD Total
+            with portfolio_cols[4]:
+                if total_value > 0:
+                    st.metric("💵 USD Total", f"${total_value:,.2f}",
+                             delta=f"From {len(valid_values)}/4 assets" if failed_apis else None)
+                else:
+                    st.metric("💵 USD Total", "No Valid Prices")
+            
+            # INR Total
+            with portfolio_cols[5]:
+                usdt_inr_rate = 83.50
+                if total_value > 0:
+                    st.metric("🇮🇳 INR Total", f"₹{total_value * usdt_inr_rate:,.0f}")
+                else:
+                    st.metric("🇮🇳 INR Total", "No Valid Prices")
+            
+            # BTC Equivalent
+            with portfolio_cols[6]:
+                if total_value > 0 and btc_price and btc_price > 0:
+                    st.metric("₿ BTC Equiv", f"₿{total_value / btc_price:.8f}")
+                elif btc_price is None or btc_price <= 0:
+                    st.metric("₿ BTC Equiv", "BTC API Failed")
+                else:
+                    st.metric("₿ BTC Equiv", "No Valid Prices")
         
         except Exception as e:
             st.error(f"❌ Error calculating portfolio values: {e}")
