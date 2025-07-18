@@ -1070,80 +1070,8 @@ def main():
             # Generate portfolio display content
             usdt_inr_rate = 83.50
             
-            # Create individual asset boxes
+            # Create only summary boxes (no individual asset repetition)
             portfolio_html = '<div class="portfolio-container">'
-            
-            # Bitcoin box
-            if btc_value is not None:
-                portfolio_html += f'''
-                <div class="portfolio-box">
-                    <div class="portfolio-emoji">₿</div>
-                    <div class="portfolio-label">Bitcoin Value</div>
-                    <div class="portfolio-value">${btc_value:,.2f}</div>
-                    <div class="portfolio-amount">{btc_amount:.8f} BTC</div>
-                </div>'''
-            else:
-                portfolio_html += f'''
-                <div class="portfolio-box">
-                    <div class="portfolio-emoji">₿</div>
-                    <div class="portfolio-label">Bitcoin Value</div>
-                    <div class="portfolio-value">API Failed</div>
-                    <div class="portfolio-amount">{btc_amount:.8f} BTC</div>
-                </div>'''
-            
-            # Ethereum box
-            if eth_value is not None:
-                portfolio_html += f'''
-                <div class="portfolio-box">
-                    <div class="portfolio-emoji">⟠</div>
-                    <div class="portfolio-label">Ethereum Value</div>
-                    <div class="portfolio-value">${eth_value:,.2f}</div>
-                    <div class="portfolio-amount">{eth_amount:.4f} ETH</div>
-                </div>'''
-            else:
-                portfolio_html += f'''
-                <div class="portfolio-box">
-                    <div class="portfolio-emoji">⟠</div>
-                    <div class="portfolio-label">Ethereum Value</div>
-                    <div class="portfolio-value">API Failed</div>
-                    <div class="portfolio-amount">{eth_amount:.4f} ETH</div>
-                </div>'''
-            
-            # BNB box
-            if bnb_value is not None:
-                portfolio_html += f'''
-                <div class="portfolio-box">
-                    <div class="portfolio-emoji">🔸</div>
-                    <div class="portfolio-label">BNB Value</div>
-                    <div class="portfolio-value">${bnb_value:,.2f}</div>
-                    <div class="portfolio-amount">{bnb_amount:.4f} BNB</div>
-                </div>'''
-            else:
-                portfolio_html += f'''
-                <div class="portfolio-box">
-                    <div class="portfolio-emoji">🔸</div>
-                    <div class="portfolio-label">BNB Value</div>
-                    <div class="portfolio-value">API Failed</div>
-                    <div class="portfolio-amount">{bnb_amount:.4f} BNB</div>
-                </div>'''
-            
-            # POL box
-            if pol_value is not None:
-                portfolio_html += f'''
-                <div class="portfolio-box">
-                    <div class="portfolio-emoji">🔷</div>
-                    <div class="portfolio-label">POL Value</div>
-                    <div class="portfolio-value">${pol_value:,.2f}</div>
-                    <div class="portfolio-amount">{pol_amount:.2f} POL</div>
-                </div>'''
-            else:
-                portfolio_html += f'''
-                <div class="portfolio-box">
-                    <div class="portfolio-emoji">🔷</div>
-                    <div class="portfolio-label">POL Value</div>
-                    <div class="portfolio-value">API Failed</div>
-                    <div class="portfolio-amount">{pol_amount:.2f} POL</div>
-                </div>'''
             
             # Total value boxes with special styling
             if total_value > 0:
@@ -1212,6 +1140,9 @@ def main():
         except Exception as e:
             st.error(f"❌ Error calculating portfolio values: {e}")
             st.info("🔄 Please try refreshing prices or check API connectivity.")
+        
+        # Add extra spacing before Portfolio Management section
+        st.markdown("<br><br>", unsafe_allow_html=True)
         
         # Enhanced portfolio management with session state
         st.subheader("💾 Portfolio Management")
