@@ -26,3 +26,106 @@
 2025-07-18 14:56:02,379 - INFO - _log:119 - Processing command line argument: --all
 2025-07-18 14:56:02,379 - INFO - _log:119 - 🔄 Starting operation #2: Force deploy all files mode (CLI)
 2025-07-18 14:56:02,379 - INFO - _log:119 - Force deploy: staging ALL files in repository without any checks
+2025-07-18 14:56:02,383 - INFO - _log:119 - 🔄 Starting operation #3: Commit staged changes
+2025-07-18 14:56:02,389 - INFO - _log:119 - 🔄 Starting operation #4: Generate commit message
+2025-07-18 14:56:02,390 - INFO - _log:119 - ✅ ✅ COMPLETED operation: Generate commit message
+📊 Context: {
+  "generated_message": "feat: enhance deployment automation and workflow scripts (6 files)",
+  "analysis": {
+    "app_changes": true,
+    "config_changes": false,
+    "script_changes": false,
+    "doc_changes": false,
+    "deployment_changes": true,
+    "requirements_changes": false,
+    "total_files": 6,
+    "file_types": {
+      ".py": 1,
+      ".log": 5
+    }
+  },
+  "changed_files": [
+    "app.py",
+    "deployment_logs/deployment_20250718_125032.log",
+    "deployment_logs/deployment_20250718_125847.log",
+    "deployment_logs/deployment_20250718_130119.log",
+    "deployment_logs/deployment_20250718_145558.log",
+    "deployment_logs/deployment_20250718_145602.log"
+  ]
+}
+2025-07-18 14:56:02,390 - INFO - _log:119 - Using auto-generated commit message
+📊 Context: {
+  "message": "feat: enhance deployment automation and workflow scripts (6 files)"
+}
+2025-07-18 14:56:02,390 - INFO - _log:119 - 💾 Committing with message: 'feat: enhance deployment automation and workflow scripts (6 files)'
+2025-07-18 14:56:02,390 - INFO - _log:119 - Executing commit
+📊 Context: {
+  "staged_files": [
+    "app.py",
+    "deployment_logs/deployment_20250718_125032.log",
+    "deployment_logs/deployment_20250718_125847.log",
+    "deployment_logs/deployment_20250718_130119.log",
+    "deployment_logs/deployment_20250718_145558.log",
+    "deployment_logs/deployment_20250718_145602.log"
+  ],
+  "staged_count": 6,
+  "timestamp": "2025-07-18T14:56:02.386074",
+  "current_branch": "main",
+  "parent_commit": "2074baaf895075d599d0a5cfb4a7f2ecd1b46c59",
+  "commit_message": "feat: enhance deployment automation and workflow scripts (6 files)"
+}
+2025-07-18 14:56:02,397 - INFO - _log:119 - ✅ Commit successful!
+2025-07-18 14:56:02,397 - INFO - _log:119 - ✅ ✅ COMPLETED operation: Commit staged changes
+📊 Context: {
+  "staged_files": [
+    "app.py",
+    "deployment_logs/deployment_20250718_125032.log",
+    "deployment_logs/deployment_20250718_125847.log",
+    "deployment_logs/deployment_20250718_130119.log",
+    "deployment_logs/deployment_20250718_145558.log",
+    "deployment_logs/deployment_20250718_145602.log"
+  ],
+  "staged_count": 6,
+  "timestamp": "2025-07-18T14:56:02.386074",
+  "current_branch": "main",
+  "parent_commit": "2074baaf895075d599d0a5cfb4a7f2ecd1b46c59",
+  "commit_message": "feat: enhance deployment automation and workflow scripts (6 files)",
+  "new_commit_hash": "55f3b89cd588f1f402a7cc25a41dc44d66cfa8ca"
+}
+2025-07-18 14:56:02,397 - INFO - _log:119 - 🔄 Starting operation #5: Push changes to remote
+2025-07-18 14:56:02,401 - INFO - _log:119 - Found 1 commits to push
+📊 Context: {
+  "remote": "origin",
+  "branch": "main",
+  "timestamp": "2025-07-18T14:56:02.398021",
+  "available_remotes": [
+    "origin"
+  ],
+  "commits_ahead": 1
+}
+2025-07-18 14:56:02,401 - INFO - _log:119 - 🚀 Pushing to origin/main...
+2025-07-18 14:57:02,466 - ERROR - _log:119 - ⏰ Command timeout: git push origin main | Exception: Command '['git', 'push', 'origin', 'main']' timed out after 60 seconds
+📊 Context: {
+  "timeout_seconds": 60,
+  "command": [
+    "git",
+    "push",
+    "origin",
+    "main"
+  ],
+  "exception_type": "TimeoutExpired",
+  "traceback": "Traceback (most recent call last):\n  File \"/home/jack/Documents/cpweb/deploy.py\", line 210, in run_command\n    result = subprocess.run(\n        cmd,\n    ...<3 lines>...\n        timeout=timeout\n    )\n  File \"/usr/lib64/python3.13/subprocess.py\", line 556, in run\n    stdout, stderr = process.communicate(input, timeout=timeout)\n                     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib64/python3.13/subprocess.py\", line 1222, in communicate\n    stdout, stderr = self._communicate(input, endtime, timeout)\n                     ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib64/python3.13/subprocess.py\", line 2129, in _communicate\n    self._check_timeout(endtime, orig_timeout, stdout, stderr)\n    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib64/python3.13/subprocess.py\", line 1269, in _check_timeout\n    raise TimeoutExpired(\n    ...<2 lines>...\n            stderr=b''.join(stderr_seq) if stderr_seq else None)\nsubprocess.TimeoutExpired: Command '['git', 'push', 'origin', 'main']' timed out after 60 seconds\n"
+}
+2025-07-18 14:57:02,466 - INFO - _log:119 - ❌ Push failed: Command timeout after 60 seconds
+2025-07-18 14:57:02,466 - ERROR - _log:119 - ❌ FAILED operation: Push changes to remote
+📊 Context: {
+  "remote": "origin",
+  "branch": "main",
+  "timestamp": "2025-07-18T14:56:02.398021",
+  "available_remotes": [
+    "origin"
+  ],
+  "commits_ahead": 1,
+  "error_output": "Command timeout after 60 seconds"
+}
+2025-07-18 14:57:02,466 - ERROR - _log:119 - ❌ FAILED operation: Force deploy all files mode (CLI)
