@@ -415,7 +415,7 @@ def main():
             # Show API status to user with detailed information including sources
             if price_result['success_count'] == price_result['total_count']:
                 sources_text = f" via {', '.join(sources_used)}" if sources_used else ""
-                st.success(f"✅ All price APIs successful ({success_rate}){sources_text}")
+                # Success is logged but not displayed to user (already in debug logs)
                 debug_log(f"All APIs successful: {success_rate}{sources_text}", "SUCCESS")
             elif price_result['success_count'] > 0:
                 sources_text = f" via {', '.join(sources_used)}" if sources_used else ""
