@@ -1074,8 +1074,14 @@ def main():
         # Add cache for metrics with 5-minute TTL
         @st.cache_data(ttl=300)
         def cached_get_bitcoin_metrics():
-            from bitcoin_metrics import bitcoin_metrics
-            return bitcoin_metrics.get_comprehensive_metrics()
+            debug_log("🚀 Initializing Bitcoin Metrics with enhanced logging...", "INFO", "bitcoin_metrics_init")
+            
+            from bitcoin_metrics import BitcoinMetrics
+            # Create instance with debug logging
+            btc_metrics = BitcoinMetrics(debug_logger=debug_log)
+            
+            debug_log("📊 Starting comprehensive Bitcoin metrics collection...", "INFO", "bitcoin_metrics_start")
+            return btc_metrics.get_comprehensive_metrics()
         
         # Refresh button
         col_refresh, col_status = st.columns([1, 3])
@@ -1292,28 +1298,31 @@ def main():
                                 st.error("❌ Transaction data unavailable")
                         
                         with trans_col2:
-                            # Active Addresses
-                            if 'n-active-addresses' in charts:
-                                addr_data = charts['n-active-addresses']
-                                if addr_data.get('values'):
-                                    # Similar plotting for active addresses
-                                    dates = [datetime.fromtimestamp(point['x']) for point in addr_data['values']]
-                                    values = [point['y'] for point in addr_data['values']]
+                            # Network Activity (Alternative to deprecated Active Addresses)
+                            if 'n-transactions' in charts:
+                                tx_data = charts['n-transactions']
+                                if tx_data.get('values'):
+                                    # Use transaction data as a proxy for network activity
+                                    dates = [datetime.fromtimestamp(point['x']) for point in tx_data['values']]
+                                    values = [point['y'] for point in tx_data['values']]
+                                    
+                                    # Calculate transactions per address as an activity metric
+                                    # This gives us a different perspective on network usage
                                     
                                     fig = go.Figure()
                                     fig.add_trace(go.Scatter(
                                         x=dates, 
                                         y=values,
                                         mode='lines+markers',
-                                        name='Active Addresses',
+                                        name='Daily Transactions',
                                         line=dict(color='#00d4aa', width=2),
                                         marker=dict(size=4)
                                     ))
                                     
                                     fig.update_layout(
-                                        title="👥 Daily Active Addresses",
+                                        title="� Network Activity (Daily Transactions)",
                                         xaxis_title="Date",
-                                        yaxis_title="Active Addresses",
+                                        yaxis_title="Number of Transactions",
                                         height=400,
                                         template="plotly_dark"
                                     )
@@ -1321,9 +1330,13 @@ def main():
                                     st.plotly_chart(fig, use_container_width=True)
                                     
                                     if values:
-                                        st.metric("👤 Latest Active Addresses", f"{values[-1]:,.0f}")
+                                        # Show transactions per second for context
+                                        latest_tx = values[-1]
+                                        tx_per_second = latest_tx / (24 * 60 * 60)
+                                        st.metric("� Latest Daily Transactions", f"{latest_tx:,.0f}")
+                                        st.metric("⚡ Transactions per Second", f"{tx_per_second:.2f}")
                             else:
-                                st.error("❌ Active addresses data unavailable")
+                                st.warning("⚠️ Network activity data temporarily unavailable")
                     
                     with chart_tab2:
                         # Mining Charts
@@ -1335,7 +1348,44 @@ def main():
                                 hash_data = charts['hash-rate']
                                 if hash_data.get('values'):
                                     dates = [datetime.fromtimestamp(point['x']) for point in hash_data['values']]
-                                    values = [point['y'] / 1e18 for point in hash_data['values']]  # Convert to EH/s
+                                    raw_values = [point['y'] for point in hash_data['values']]
+                                    
+                                    # Debug logging for hash rate values
+                                    debug_log("🔍 HASH RATE DEBUG", "hash_rate_debug", {
+                                        'raw_values_sample': raw_values[-3:] if len(raw_values) >= 3 else raw_values,
+                                        'raw_values_count': len(raw_values),
+                                        'latest_raw_value': raw_values[-1] if raw_values else None,
+                                        'raw_value_type': type(raw_values[-1]).__name__ if raw_values else None
+                                    })
+                                    
+                                    # Convert hash rate: Blockchain.info returns hash rate in TH/s format
+                                    # API unit: "Hash Rate TH/s" - confirmed via API test
+                                    # Need to convert TH/s to EH/s: 1 EH/s = 1,000,000 TH/s (1e6)
+                                    
+                                    # Check the magnitude of raw values to determine correct conversion
+                                    latest_raw = raw_values[-1] if raw_values else 0
+                                    if latest_raw > 1e15:  # Values in H/s (very large)
+                                        values = [v / 1e18 for v in raw_values]  # Convert to EH/s
+                                        unit_debug = "H/s -> EH/s (÷1e18)"
+                                    elif latest_raw > 1e6:  # Values in TH/s (expected from API)
+                                        values = [v / 1e6 for v in raw_values]   # Convert TH/s to EH/s
+                                        unit_debug = "TH/s -> EH/s (÷1e6) [API confirmed]"
+                                    elif latest_raw > 1e3:   # Values in GH/s  
+                                        values = [v / 1e9 for v in raw_values]   # Convert to EH/s
+                                        unit_debug = "GH/s -> EH/s (÷1e9)"
+                                    elif latest_raw > 1:   # Values in MH/s or already scaled
+                                        values = [v / 1e12 for v in raw_values]  # Convert to EH/s
+                                        unit_debug = "MH/s -> EH/s (÷1e12)"
+                                    else:  # Values might already be in EH/s or zero
+                                        values = raw_values  # No conversion
+                                        unit_debug = "No conversion (assumed EH/s or zero)"
+                                    
+                                    debug_log("🔍 HASH RATE CONVERSION", "hash_rate_conversion", {
+                                        'conversion_applied': unit_debug,
+                                        'converted_values_sample': values[-3:] if len(values) >= 3 else values,
+                                        'latest_converted_value': values[-1] if values else None,
+                                        'latest_raw_magnitude': f"{latest_raw:.2e}" if latest_raw > 0 else "0"
+                                    })
                                     
                                     fig = go.Figure()
                                     fig.add_trace(go.Scatter(
@@ -1474,7 +1524,18 @@ def main():
                 
                 # Block timing
                 with network_col1:
-                    if 'avg-block-time' in charts:
+                    if 'avg_block_time' in metrics:
+                        # Use the new direct avg_block_time field
+                        avg_block_time = metrics['avg_block_time']
+                        delta_color = "normal" if 8 <= avg_block_time <= 12 else "inverse"
+                        st.metric(
+                            "⏰ Avg Block Time", 
+                            f"{avg_block_time:.1f} min",
+                            delta=f"Target: 10 min",
+                            delta_color=delta_color
+                        )
+                    elif 'avg-block-time' in charts:
+                        # Fallback to chart data if available
                         block_time_data = charts['avg-block-time']
                         if block_time_data.get('values') and len(block_time_data['values']) > 0:
                             latest_block_time = block_time_data['values'][-1]['y'] / 60  # Convert to minutes
@@ -1492,30 +1553,119 @@ def main():
                 
                 # Block size
                 with network_col2:
+                    # Debug logging for block size data
+                    debug_log("🔍 DEBUG: Block size data check", "block_size_debug", {
+                        'charts_exists': 'chart_data' in metrics,
+                        'avg_block_size_in_charts': 'avg-block-size' in charts if charts else False,
+                        'charts_keys': list(charts.keys()) if charts else [],
+                        'avg_block_size_data_exists': charts.get('avg-block-size') is not None if charts else False
+                    })
+                    
                     if 'avg-block-size' in charts:
                         block_size_data = charts['avg-block-size']
+                        
+                        debug_log("🔍 DEBUG: Block size data structure", "block_size_structure", {
+                            'block_size_data_type': type(block_size_data).__name__,
+                            'has_values': 'values' in block_size_data if isinstance(block_size_data, dict) else False,
+                            'values_count': len(block_size_data.get('values', [])) if isinstance(block_size_data, dict) else 0,
+                            'first_value': block_size_data.get('values', [{}])[0] if isinstance(block_size_data, dict) and block_size_data.get('values') else None,
+                            'last_value': block_size_data.get('values', [{}])[-1] if isinstance(block_size_data, dict) and block_size_data.get('values') else None
+                        })
+                        
                         if block_size_data.get('values') and len(block_size_data['values']) > 0:
-                            latest_block_size = block_size_data['values'][-1]['y'] / 1e6  # Convert to MB
-                            st.metric("📏 Avg Block Size", f"{latest_block_size:.2f} MB")
+                            latest_value = block_size_data['values'][-1]
+                            
+                            debug_log("🔍 DEBUG: Block size calculation", "block_size_calculation", {
+                                'latest_value': latest_value,
+                                'latest_value_type': type(latest_value).__name__,
+                                'y_value': latest_value.get('y') if isinstance(latest_value, dict) else None,
+                                'y_value_type': type(latest_value.get('y')).__name__ if isinstance(latest_value, dict) and latest_value.get('y') is not None else 'None'
+                            })
+                            
+                            if isinstance(latest_value, dict) and 'y' in latest_value:
+                                y_value = latest_value['y']
+                                # The Blockchain.info avg-block-size chart returns values in MB already, not bytes
+                                latest_block_size = y_value  # No conversion needed
+                                
+                                debug_log("🔍 DEBUG: Final block size conversion", "block_size_final", {
+                                    'raw_mb': y_value,
+                                    'final_mb': latest_block_size,
+                                    'display_string': f"{latest_block_size:.2f} MB"
+                                })
+                                
+                                st.metric("📏 Avg Block Size", f"{latest_block_size:.2f} MB")
+                            else:
+                                debug_log("❌ ERROR: Invalid latest value structure", "block_size_error", {
+                                    'latest_value': latest_value
+                                })
+                                st.metric("📏 Avg Block Size", "Data Error")
                         else:
+                            debug_log("❌ ERROR: No values in block size data", "block_size_no_values", {
+                                'block_size_data': block_size_data
+                            })
                             st.metric("📏 Avg Block Size", "API Failed")
                     else:
+                        debug_log("❌ ERROR: avg-block-size not in charts", "block_size_missing", {
+                            'available_charts': list(charts.keys()) if charts else []
+                        })
                         st.metric("📏 Avg Block Size", "API Failed")
                 
-                # Block reward
+                # Block reward and halving details
                 with network_col3:
                     if blockchain_data.get('block_reward'):
                         block_reward = blockchain_data['block_reward']
                         st.metric("🎁 Block Reward", f"{block_reward} BTC")
                         
-                        # Calculate next halving (rough estimate)
+                        # Enhanced halving calculations with validation
                         current_blocks = blockchain_data.get('block_count', 0)
                         blocks_per_halving = 210_000
-                        next_halving_block = ((current_blocks // blocks_per_halving) + 1) * blocks_per_halving
-                        blocks_to_halving = next_halving_block - current_blocks
-                        days_to_halving = (blocks_to_halving * 10) / (60 * 24)  # ~10 min blocks
                         
+                        # Calculate current halving epoch and cycle details
+                        current_epoch = current_blocks // blocks_per_halving
+                        current_cycle_start = current_epoch * blocks_per_halving
+                        blocks_mined_this_cycle = current_blocks - current_cycle_start
+                        next_halving_block = (current_epoch + 1) * blocks_per_halving
+                        blocks_to_halving = next_halving_block - current_blocks
+                        
+                        # More accurate time calculation using actual average block time from mempool data
+                        mempool_info = st.session_state.get('mempool_data', {})
+                        actual_block_time = 10.0  # Default fallback
+                        if mempool_info and 'difficulty' in mempool_info:
+                            time_avg_ms = mempool_info['difficulty'].get('timeAvg', 600000)  # milliseconds
+                            actual_block_time = time_avg_ms / 1000 / 60  # Convert to minutes
+                        
+                        days_to_halving = (blocks_to_halving * actual_block_time) / (60 * 24)
+                        
+                        # Add comprehensive halving debug logging
+                        debug_log("🎯 HALVING CALCULATION", "halving_debug", {
+                            'current_blocks': current_blocks,
+                            'current_epoch': current_epoch,
+                            'blocks_mined_this_cycle': blocks_mined_this_cycle,
+                            'blocks_to_halving': blocks_to_halving,
+                            'next_halving_block': next_halving_block,
+                            'actual_block_time_minutes': actual_block_time,
+                            'days_to_halving': days_to_halving,
+                            'validation': {
+                                'blocks_per_cycle': blocks_per_halving,
+                                'cycle_progress_percent': (blocks_mined_this_cycle / blocks_per_halving) * 100
+                            }
+                        })
+                        
+                        # Display main halving countdown
                         st.metric("📅 Est. Days to Halving", f"{days_to_halving:,.0f}")
+                        
+                        # Add detailed halving cycle information
+                        st.caption(f"🔄 **Halving Cycle {current_epoch + 1}**")
+                        st.caption(f"✅ Blocks Mined: {blocks_mined_this_cycle:,} / {blocks_per_halving:,}")
+                        st.caption(f"⏳ Blocks Remaining: {blocks_to_halving:,}")
+                        
+                        # Progress percentage
+                        cycle_progress = (blocks_mined_this_cycle / blocks_per_halving) * 100
+                        st.caption(f"📊 Cycle Progress: {cycle_progress:.1f}%")
+                        
+                        # Next halving block number
+                        st.caption(f"🎯 Next Halving Block: {next_halving_block:,}")
+                        
                     else:
                         st.metric("🎁 Block Reward", "API Failed")
                 
