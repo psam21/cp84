@@ -793,7 +793,7 @@ def main():
         # Initialize portfolio in session state
         initialize_portfolio_session()
         
-        st.subheader("🪙 Asset Holdings")
+        st.subheader("🪙 Asset Holdings & Portfolio Overview")
         
         # Add price refresh button with transparent status
         refresh_col, status_col = st.columns([1, 3])
@@ -836,19 +836,35 @@ def main():
         bnb_price = binance_prices.get('BNB')
         pol_price = binance_prices.get('POL')
         
+        # Calculate portfolio values first for enhanced display
+        btc_amount = st.session_state.portfolio['btc']
+        eth_amount = st.session_state.portfolio['eth']
+        bnb_amount = st.session_state.portfolio['bnb']
+        pol_amount = st.session_state.portfolio['pol']
+        
+        btc_value = btc_amount * btc_price if btc_price and btc_price > 0 else None
+        eth_value = eth_amount * eth_price if eth_price and eth_price > 0 else None
+        bnb_value = bnb_amount * bnb_price if bnb_price and bnb_price > 0 else None
+        pol_value = pol_amount * pol_price if pol_price and pol_price > 0 else None
+        
         with col1:
             if btc_price and btc_price > 0:
                 price_display = f"${btc_price:,.0f}"
                 card_class = "crypto-btc"
+                portfolio_value = f"${btc_value:,.2f}" if btc_value else "$0.00"
             else:
                 price_display = "API Failed"
                 card_class = "crypto-btc fee-high"  # Red background for failed API
+                portfolio_value = "N/A"
             
             st.markdown(f"""
             <div class="metric-card {card_class}">
                 <h4>₿ Bitcoin (BTC)</h4>
                 <h2>{price_display}</h2>
                 <p>{'Current Price' if btc_price and btc_price > 0 else 'Price Unavailable'}</p>
+                <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.2);">
+                    <small>Portfolio Value: <strong>{portfolio_value}</strong></small>
+                </div>
             </div>
             """, unsafe_allow_html=True)
             btc_amount = st.number_input("BTC Holdings", 
@@ -861,15 +877,20 @@ def main():
             if eth_price and eth_price > 0:
                 price_display = f"${eth_price:,.0f}"
                 card_class = "crypto-eth"
+                portfolio_value = f"${eth_value:,.2f}" if eth_value else "$0.00"
             else:
                 price_display = "API Failed"
                 card_class = "crypto-eth fee-high"
+                portfolio_value = "N/A"
                 
             st.markdown(f"""
             <div class="metric-card {card_class}">
                 <h4>⟠ Ethereum (ETH)</h4>
                 <h2>{price_display}</h2>
                 <p>{'Current Price' if eth_price and eth_price > 0 else 'Price Unavailable'}</p>
+                <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.2);">
+                    <small>Portfolio Value: <strong>{portfolio_value}</strong></small>
+                </div>
             </div>
             """, unsafe_allow_html=True)
             eth_amount = st.number_input("ETH Holdings", 
@@ -882,15 +903,20 @@ def main():
             if bnb_price and bnb_price > 0:
                 price_display = f"${bnb_price:,.0f}"
                 card_class = "crypto-bnb"
+                portfolio_value = f"${bnb_value:,.2f}" if bnb_value else "$0.00"
             else:
                 price_display = "API Failed"
                 card_class = "crypto-bnb fee-high"
+                portfolio_value = "N/A"
                 
             st.markdown(f"""
             <div class="metric-card {card_class}">
                 <h4>🔸 Binance Coin (BNB)</h4>
                 <h2>{price_display}</h2>
                 <p>{'Current Price' if bnb_price and bnb_price > 0 else 'Price Unavailable'}</p>
+                <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.2);">
+                    <small>Portfolio Value: <strong>{portfolio_value}</strong></small>
+                </div>
             </div>
             """, unsafe_allow_html=True)
             bnb_amount = st.number_input("BNB Holdings", 
@@ -903,15 +929,20 @@ def main():
             if pol_price and pol_price > 0:
                 price_display = f"${pol_price:,.4f}"
                 card_class = "crypto-pol"
+                portfolio_value = f"${pol_value:,.2f}" if pol_value else "$0.00"
             else:
                 price_display = "API Failed"
                 card_class = "crypto-pol fee-high"
+                portfolio_value = "N/A"
                 
             st.markdown(f"""
             <div class="metric-card {card_class}">
                 <h4>🔷 Polygon (POL)</h4>
                 <h2>{price_display}</h2>
                 <p>{'Current Price' if pol_price and pol_price > 0 else 'Price Unavailable'}</p>
+                <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.2);">
+                    <small>Portfolio Value: <strong>{portfolio_value}</strong></small>
+                </div>
             </div>
             """, unsafe_allow_html=True)
             pol_amount = st.number_input("POL Holdings", 
