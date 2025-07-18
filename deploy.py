@@ -1229,6 +1229,30 @@ def main():
                         # Skip git status check, force stage everything
                         logger.info("Force deploy: staging all files without status check")
                         
+                        # Check if there are actually any files to stage by using git diff
+                        success, diff_output = git_auto.run_command(["git", "diff", "--name-only"])
+                        success2, diff_staged = git_auto.run_command(["git", "diff", "--cached", "--name-only"])
+                        success3, untracked = git_auto.run_command(["git", "ls-files", "--others", "--exclude-standard"])
+                        
+                        unstaged_files = diff_output.strip().split('\n') if diff_output.strip() else []
+                        staged_files = diff_staged.strip().split('\n') if diff_staged.strip() else []
+                        untracked_files = untracked.strip().split('\n') if untracked.strip() else []
+                        
+                        total_changes = len([f for f in unstaged_files if f]) + len([f for f in staged_files if f]) + len([f for f in untracked_files if f])
+                        
+                        if total_changes == 0:
+                            print(f"{Colors.OKCYAN}✅ Repository is clean - no files to deploy{Colors.ENDC}")
+                            logger.info("Force deploy: repository is clean, nothing to deploy")
+                            return
+                        
+                        print(f"{Colors.OKCYAN}📁 Found {total_changes} files to deploy:{Colors.ENDC}")
+                        if unstaged_files and unstaged_files[0]:
+                            print(f"  🔄 Unstaged: {len(unstaged_files)} files")
+                        if staged_files and staged_files[0]:
+                            print(f"  ✅ Already staged: {len(staged_files)} files") 
+                        if untracked_files and untracked_files[0]:
+                            print(f"  ❓ Untracked: {len(untracked_files)} files")
+                        
                         if (git_auto.stage_files(stage_all=True) and 
                             git_auto.commit_changes(auto_message=True) and 
                             git_auto.push_changes()):
