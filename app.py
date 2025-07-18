@@ -648,8 +648,8 @@ def main():
         
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # Main content with better organization
-        col_left, col_right = st.columns([1.2, 0.8])
+        # Main content with better organization and consistent spacing
+        col_left, col_right = st.columns([1.2, 0.8], gap="medium")
         
         with col_left:
             # Enhanced mempool blocks visualization
@@ -679,8 +679,8 @@ def main():
                 ))
                 
                 fig_blocks.update_layout(
-                    height=280,
-                    margin=dict(l=0, r=0, t=20, b=0),
+                    height=300,
+                    margin=dict(l=0, r=0, t=10, b=20),
                     showlegend=False,
                     xaxis_title="Upcoming Blocks",
                     yaxis_title="Transaction Count",
@@ -689,7 +689,7 @@ def main():
                 )
                 st.plotly_chart(fig_blocks, use_container_width=True)
             
-            # Enhanced Network Health Dashboard
+            # Enhanced Network Health Dashboard with consistent spacing
             st.subheader("🎯 Network Health Dashboard")
             health_col1, health_col2, health_col3, health_col4 = st.columns(4)
             
@@ -737,15 +737,15 @@ def main():
                     textposition='auto'
                 )])
                 fig_pie.update_layout(
-                    height=480,
-                    margin=dict(l=0, r=0, t=20, b=0),
+                    height=300,
+                    margin=dict(l=0, r=0, t=10, b=20),
                     showlegend=False,
                     plot_bgcolor='rgba(0,0,0,0)',
                     paper_bgcolor='rgba(0,0,0,0)'
                 )
                 st.plotly_chart(fig_pie, use_container_width=True)
             
-            # Enhanced difficulty information
+            # Enhanced difficulty information with consistent spacing
             if 'error' not in mempool_data and 'difficulty' in mempool_data:
                 st.subheader("🎯 Difficulty Adjustment")
                 difficulty = mempool_data['difficulty']
@@ -763,8 +763,9 @@ def main():
                 diff_col2.metric(f"{change_color} Expected Change", f"{change:+.1f}%", 
                                delta="Difficulty adjustment")
         
-        # Enhanced latest blocks section
+        # Enhanced latest blocks section with better spacing
         if 'error' not in mempool_data and 'latest_blocks' in mempool_data:
+            st.markdown("<br>", unsafe_allow_html=True)
             st.subheader("🧱 Recent Blocks")
             blocks_cols = st.columns(6)
             for i, block in enumerate(mempool_data['latest_blocks'][:6]):
@@ -775,7 +776,7 @@ def main():
                         delta=f"Size: {block.get('size', 'N/A')}"
                     )
         
-        # Enhanced refresh section
+        # Enhanced refresh section with minimal spacing
         st.markdown("<br>", unsafe_allow_html=True)
         refresh_col1, refresh_col2 = st.columns([1, 3])
         with refresh_col1:
