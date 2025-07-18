@@ -13,10 +13,16 @@ def get_multi_exchange_prices():
     import sys
     import os
     
+    print("🔍 DEBUG: Starting get_multi_exchange_prices() function")
+    print(f"🔍 DEBUG: Python executable: {sys.executable}")
+    print(f"🔍 DEBUG: Working directory: {os.getcwd()}")
+    print(f"🔍 DEBUG: Python path: {sys.path[:3]}...")  # Show first 3 paths
+    
     # Add current directory to path for imports
     current_dir = os.path.dirname(os.path.abspath(__file__))
     if current_dir not in sys.path:
         sys.path.append(current_dir)
+        print(f"✅ DEBUG: Added {current_dir} to sys.path")
     
     results = {
         'prices': {'BTC': None, 'ETH': None, 'BNB': None, 'POL': None},
@@ -26,6 +32,8 @@ def get_multi_exchange_prices():
         'sources_used': []
     }
     
+    print("🔍 DEBUG: Initialized results dictionary")
+    
     # Try exchanges in order of preference
     exchanges = [
         ('Binance', try_binance),
@@ -34,67 +42,116 @@ def get_multi_exchange_prices():
         ('CoinGecko', try_coingecko)
     ]
     
-    for exchange_name, exchange_func in exchanges:
-        print(f"🔄 Trying {exchange_name} API...")
+    print(f"🔍 DEBUG: Will try {len(exchanges)} exchanges: {[ex[0] for ex in exchanges]}")
+    
+    for i, (exchange_name, exchange_func) in enumerate(exchanges):
+        print(f"🔄 DEBUG: Trying exchange {i+1}/{len(exchanges)}: {exchange_name}")
         
         try:
+            print(f"🔍 DEBUG: Calling {exchange_name} function...")
             exchange_result = exchange_func()
+            
+            print(f"📊 DEBUG: {exchange_name} returned: {type(exchange_result)}")
+            print(f"📊 DEBUG: {exchange_name} success_count: {exchange_result.get('success_count', 'MISSING')}")
+            print(f"📊 DEBUG: {exchange_name} prices: {exchange_result.get('prices', {})}")
             
             if exchange_result['success_count'] > 0:
                 results['sources_used'].append(exchange_name)
+                print(f"✅ DEBUG: {exchange_name} had {exchange_result['success_count']} successful prices")
                 
                 # Fill in any missing prices
                 for symbol in ['BTC', 'ETH', 'BNB', 'POL']:
                     if (results['prices'][symbol] is None and 
                         exchange_result['prices'].get(symbol) is not None):
                         results['prices'][symbol] = exchange_result['prices'][symbol]
-                        print(f"✅ Got {symbol} price from {exchange_name}")
+                        print(f"✅ DEBUG: Got {symbol} price from {exchange_name}: {exchange_result['prices'][symbol]}")
                 
                 # Update success count
                 results['success_count'] = len([p for p in results['prices'].values() if p is not None])
+                print(f"📊 DEBUG: Updated total success_count to: {results['success_count']}")
                 
                 # If we have all prices, we can stop
                 if results['success_count'] == 4:
-                    print(f"🎉 All prices obtained! Sources: {', '.join(results['sources_used'])}")
+                    print(f"🎉 DEBUG: All prices obtained! Sources: {', '.join(results['sources_used'])}")
                     break
+            else:
+                print(f"❌ DEBUG: {exchange_name} had 0 successful prices")
                     
         except Exception as e:
             error_msg = f"❌ {exchange_name} failed: {str(e)}"
             results['errors'].append(error_msg)
-            print(error_msg)
+            print(f"❌ DEBUG: {error_msg}")
+            print(f"📋 DEBUG: Exception type: {type(e)}")
+            print(f"📋 DEBUG: Exception details: {repr(e)}")
     
     # Add any remaining errors for missing prices
     for symbol in ['BTC', 'ETH', 'BNB', 'POL']:
         if results['prices'][symbol] is None:
-            results['errors'].append(f"❌ {symbol}: All exchanges failed")
+            error_msg = f"❌ {symbol}: All exchanges failed"
+            results['errors'].append(error_msg)
+            print(f"❌ DEBUG: {error_msg}")
     
+    print(f"🏁 DEBUG: Final results - Success: {results['success_count']}/4, Sources: {results['sources_used']}")
     return results
 
 def try_binance():
     """Try to get prices from Binance"""
+    print("🔍 DEBUG: Starting try_binance() function")
+    
     try:
+        print("🔍 DEBUG: Attempting to import binance_data module...")
         from binance_data import get_binance_price
+        print("✅ DEBUG: Successfully imported get_binance_price from binance_data")
         
         symbols = [("BTC", "BTCUSDT"), ("ETH", "ETHUSDT"), ("BNB", "BNBUSDT"), ("POL", "POLUSDT")]
         prices = {}
         errors = []
         
-        for symbol, pair in symbols:
+        print(f"🔍 DEBUG: Will process {len(symbols)} symbols: {[s[0] for s in symbols]}")
+        
+        for i, (symbol, pair) in enumerate(symbols):
+            print(f"🔍 DEBUG: Processing {i+1}/{len(symbols)}: {symbol} ({pair})")
             try:
+                print(f"🔍 DEBUG: Calling get_binance_price('{pair}')...")
                 price = get_binance_price(pair)
-                prices[symbol] = price
+                print(f"📊 DEBUG: get_binance_price returned: {price} (type: {type(price)})")
+                
+                if price is not None and price > 0:
+                    prices[symbol] = price
+                    print(f"✅ DEBUG: Binance {symbol} price accepted: {price}")
+                else:
+                    prices[symbol] = None
+                    error_msg = f"{symbol}: Invalid price returned: {price}"
+                    errors.append(error_msg)
+                    print(f"❌ DEBUG: Binance {symbol} invalid price: {price}")
+                    
             except Exception as e:
                 prices[symbol] = None
-                errors.append(f"{symbol}: {str(e)}")
+                error_msg = f"{symbol}: {str(e)}"
+                errors.append(error_msg)
+                print(f"❌ DEBUG: Binance {symbol} exception: {str(e)} (type: {type(e)})")
         
-        return {
+        result = {
             'prices': prices,
             'errors': errors,
             'success_count': len([p for p in prices.values() if p is not None]),
             'source': 'Binance'
         }
-    except ImportError:
-        raise Exception("Binance module not available")
+        
+        print(f"🏁 DEBUG: Binance result - Success: {result['success_count']}/4")
+        print(f"🏁 DEBUG: Binance prices: {prices}")
+        print(f"🏁 DEBUG: Binance errors: {errors}")
+        
+        return result
+        
+    except ImportError as import_err:
+        error_msg = f"Binance module not available: {str(import_err)}"
+        print(f"❌ DEBUG: Binance import error: {error_msg}")
+        raise Exception(error_msg)
+    except Exception as e:
+        error_msg = f"Binance unexpected error: {str(e)}"
+        print(f"❌ DEBUG: Binance unexpected error: {error_msg}")
+        raise Exception(error_msg)
 
 def try_kucoin():
     """Try to get prices from KuCoin"""

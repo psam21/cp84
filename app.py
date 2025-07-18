@@ -25,26 +25,67 @@ def cached_get_crypto_prices():
     Fetch crypto prices using multi-exchange fallback system.
     Tries multiple exchanges for maximum Community Cloud reliability.
     """
+    # Use session state to check debug mode
+    debug_mode = getattr(st.session_state, 'debug_mode', True)
+    
+    if debug_mode:
+        st.write("🔍 **DEBUG**: Starting multi-exchange price fetch...")
+    
     try:
         from multi_exchange import get_multi_exchange_prices
         
+        if debug_mode:
+            st.write("✅ **DEBUG**: Successfully imported multi_exchange module")
+        
         print("🔄 Starting multi-exchange price fetch...")
+        if debug_mode:
+            st.write("🔄 **DEBUG**: Calling get_multi_exchange_prices()...")
+        
         result = get_multi_exchange_prices()
         
+        if debug_mode:
+            st.write(f"📊 **DEBUG**: Multi-exchange result received:")
+            st.write(f"- Success count: {result.get('success_count', 'MISSING')}")
+            st.write(f"- Total count: {result.get('total_count', 'MISSING')}")
+            st.write(f"- Sources used: {result.get('sources_used', 'MISSING')}")
+            st.write(f"- Errors count: {len(result.get('errors', []))}")
+            st.write(f"- Prices keys: {list(result.get('prices', {}).keys())}")
+            
+            # Log each price individually
+            prices = result.get('prices', {})
+            for symbol, price in prices.items():
+                st.write(f"- {symbol}: {price} (type: {type(price)})")
+        
         # Add source information to the result
-        if result['sources_used']:
+        if result.get('sources_used'):
             sources_info = f"📡 Data sources: {', '.join(result['sources_used'])}"
             print(sources_info)
+            if debug_mode:
+                st.write(f"📡 **DEBUG**: {sources_info}")
             
             # Add this info to errors for user visibility
             if 'sources_info' not in result:
                 result['sources_info'] = sources_info
         
+        if debug_mode:
+            st.write("✅ **DEBUG**: Multi-exchange fetch completed successfully")
         return result
             
     except Exception as e:
         error_msg = f"❌ Critical error in multi-exchange price fetching: {str(e)}"
         print(error_msg)
+        if debug_mode:
+            st.error(f"🚨 **DEBUG ERROR**: {error_msg}")
+            st.write(f"📋 **DEBUG**: Exception type: {type(e)}")
+            st.write(f"📋 **DEBUG**: Exception details: {repr(e)}")
+            
+            # Try to get more details about the import error
+            try:
+                import multi_exchange
+                st.write("✅ **DEBUG**: multi_exchange module import successful")
+            except Exception as import_err:
+                st.error(f"❌ **DEBUG**: multi_exchange import failed: {import_err}")
+        
         return {
             'prices': {'BTC': None, 'ETH': None, 'BNB': None, 'POL': None},
             'errors': [error_msg],
@@ -104,6 +145,12 @@ def main():
     # Initialize portfolio session state
     initialize_portfolio_session()
     
+    # DEBUG MODE TOGGLE (for production debugging)
+    if 'debug_mode' not in st.session_state:
+        st.session_state.debug_mode = True  # Enable debug by default for Community Cloud debugging
+    
+    # Add debug toggle in sidebar (will be added later after sidebar creation)
+    
     # Add custom CSS for consistent font sizing and styling
     st.markdown("""
     <style>
@@ -144,21 +191,61 @@ def main():
 
     # Pre-fetch all data at startup with transparent error reporting
     with st.spinner("🔄 Loading cryptocurrency data..."):
+        debug_mode = st.session_state.get('debug_mode', True)
+        
+        if debug_mode:
+            st.write("🔍 **DEBUG**: Starting data loading process...")
+        
         try:
+            if debug_mode:
+                st.write("🔍 **DEBUG**: Clearing price caches...")
+            
             # Force fresh API calls - clear cache first
             cached_get_crypto_prices.clear()  # Use new function name
             cached_get_binance_prices.clear()  # Clear legacy cache too
             
+            if debug_mode:
+                st.write("✅ **DEBUG**: Caches cleared successfully")
+            
+            if debug_mode:
+                st.write("🔍 **DEBUG**: Loading mempool data...")
             mempool_data = cached_get_mempool_info()
+            if debug_mode:
+                st.write(f"📊 **DEBUG**: Mempool data type: {type(mempool_data)}")
+            
+            if debug_mode:
+                st.write("🔍 **DEBUG**: Loading mempool stats...")
             mempool_stats = cached_get_mempool_stats()
+            if debug_mode:
+                st.write(f"📊 **DEBUG**: Mempool stats type: {type(mempool_stats)}")
+            
+            if debug_mode:
+                st.write("🔍 **DEBUG**: Loading price data with multi-exchange system...")
             price_result = cached_get_crypto_prices()  # Use multi-exchange system
+            if debug_mode:
+                st.write(f"📊 **DEBUG**: Price result type: {type(price_result)}")
+                st.write(f"📊 **DEBUG**: Price result keys: {list(price_result.keys()) if isinstance(price_result, dict) else 'NOT A DICT'}")
+            
+            if debug_mode:
+                st.write("🔍 **DEBUG**: Loading BTC OHLC data...")
             btc_data = cached_get_btc_ohlc_data()
+            if debug_mode:
+                st.write(f"📊 **DEBUG**: BTC data type: {type(btc_data)}")
             
             # Extract price data and show transparent status
+            if debug_mode:
+                st.write("🔍 **DEBUG**: Extracting price data from result...")
             binance_prices = price_result['prices']  # Keep variable name for compatibility
             price_errors = price_result['errors']
             success_rate = f"{price_result['success_count']}/{price_result['total_count']}"
             sources_used = price_result.get('sources_used', [])
+            
+            if debug_mode:
+                st.write(f"📊 **DEBUG**: Extracted data:")
+                st.write(f"- binance_prices: {binance_prices}")
+                st.write(f"- price_errors: {price_errors}")
+                st.write(f"- success_rate: {success_rate}")
+                st.write(f"- sources_used: {sources_used}")
             
             # Show API status to user with detailed information including sources
             if price_result['success_count'] == price_result['total_count']:
@@ -176,9 +263,22 @@ def main():
                     for error in price_errors:
                         st.error(error)
                     st.info("💡 Try refreshing the page or using the 'Refresh Prices' button in Portfolio section")
+            
+            if debug_mode:
+                st.write("✅ **DEBUG**: Data loading completed successfully")
                 
         except Exception as e:
             st.error(f"❌ Critical error loading data: {e}")
+            st.error(f"🚨 **DEBUG ERROR**: Exception type: {type(e)}")
+            st.error(f"🚨 **DEBUG ERROR**: Exception details: {repr(e)}")
+            st.error(f"🚨 **DEBUG ERROR**: Exception args: {e.args}")
+            
+            # Try to get traceback
+            import traceback
+            tb = traceback.format_exc()
+            st.error(f"🚨 **DEBUG TRACEBACK**:")
+            st.code(tb)
+            
             st.info("🔄 Please refresh the page to retry data loading.")
             # Set fallback data but be transparent about it
             st.warning("⚠️ Using fallback data due to loading errors")
@@ -197,6 +297,14 @@ def main():
         "Bitcoin Metrics",
     ]
     page = st.sidebar.radio("Go to", tabs)
+    
+    # Add debug toggle in sidebar
+    st.sidebar.divider()
+    debug_toggle = st.sidebar.checkbox("🔍 Production Debug", value=st.session_state.debug_mode, help="Show detailed logs for Community Cloud debugging")
+    st.session_state.debug_mode = debug_toggle
+    if debug_toggle:
+        st.sidebar.warning("⚠️ Debug mode ON")
+    st.sidebar.divider()
 
     if page == "Why Bitcoin?":
         st.header("Why Bitcoin is the Most Powerful Store of Value")
