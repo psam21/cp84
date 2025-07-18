@@ -1226,34 +1226,15 @@ def main():
                     print(f"{Colors.WARNING}⚡ Force deploy ALL files mode (bypassing git status)...{Colors.ENDC}")
                     
                     try:
-                        # Skip git status check, force stage everything
-                        logger.info("Force deploy: staging all files without status check")
+                        # Skip git status check, force stage EVERYTHING in the repository
+                        logger.info("Force deploy: staging ALL files in repository without any checks")
                         
-                        # Check if there are actually any files to stage by using git diff
-                        success, diff_output = git_auto.run_command(["git", "diff", "--name-only"])
-                        success2, diff_staged = git_auto.run_command(["git", "diff", "--cached", "--name-only"])
-                        success3, untracked = git_auto.run_command(["git", "ls-files", "--others", "--exclude-standard"])
+                        print(f"{Colors.WARNING}🚨 WARNING: This will stage ALL files in the repository!{Colors.ENDC}")
+                        print(f"{Colors.OKCYAN}📁 Forcing deployment of entire repository...{Colors.ENDC}")
                         
-                        unstaged_files = diff_output.strip().split('\n') if diff_output.strip() else []
-                        staged_files = diff_staged.strip().split('\n') if diff_staged.strip() else []
-                        untracked_files = untracked.strip().split('\n') if untracked.strip() else []
-                        
-                        total_changes = len([f for f in unstaged_files if f]) + len([f for f in staged_files if f]) + len([f for f in untracked_files if f])
-                        
-                        if total_changes == 0:
-                            print(f"{Colors.OKCYAN}✅ Repository is clean - no files to deploy{Colors.ENDC}")
-                            logger.info("Force deploy: repository is clean, nothing to deploy")
-                            return
-                        
-                        print(f"{Colors.OKCYAN}📁 Found {total_changes} files to deploy:{Colors.ENDC}")
-                        if unstaged_files and unstaged_files[0]:
-                            print(f"  🔄 Unstaged: {len(unstaged_files)} files")
-                        if staged_files and staged_files[0]:
-                            print(f"  ✅ Already staged: {len(staged_files)} files") 
-                        if untracked_files and untracked_files[0]:
-                            print(f"  ❓ Untracked: {len(untracked_files)} files")
-                        
-                        if (git_auto.stage_files(stage_all=True) and 
+                        # Force add all files in the repository (even unchanged ones)
+                        # This uses git add --force . to stage everything
+                        if (git_auto.run_command(["git", "add", "--force", "."])[0] and 
                             git_auto.commit_changes(auto_message=True) and 
                             git_auto.push_changes()):
                             
@@ -1290,7 +1271,7 @@ def main():
                     print(f"{Colors.OKCYAN}Usage:{Colors.ENDC}")
                     print(f"  python deploy.py           - Interactive mode")
                     print(f"  python deploy.py --quick   - Quick deploy all changes")
-                    print(f"  python deploy.py --all     - Force deploy ALL files (bypass git status)")
+                    print(f"  python deploy.py --all     - Force deploy ALL files (⚠️  FORCES ALL FILES)")
                     print(f"  python deploy.py --status  - Show git status only")
                     print(f"  python deploy.py --help    - Show this help")
                     print(f"\n{Colors.OKCYAN}Features:{Colors.ENDC}")
