@@ -5,7 +5,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 from bitfinex_data import get_btc_ohlc_data, fetch_and_update_data
 from mempool_data import get_mempool_info, get_mempool_stats
 from binance_data import get_binance_price
@@ -54,29 +54,11 @@ def debug_log(message, level="INFO", context=None, data=None):
         try:
             import psutil
             import platform
-            
-            # Get system info with better error handling
-            platform_info = platform.system()
-            python_ver = platform.python_version()
-            
-            # Try to get memory info with fallback
-            try:
-                process = psutil.Process()
-                memory_mb = round(process.memory_info().rss / 1024 / 1024, 2)
-            except:
-                memory_mb = 'psutil_error'
-            
-            # Try to get CPU info with fallback
-            try:
-                cpu_pct = round(psutil.cpu_percent(interval=0.1), 2)
-            except:
-                cpu_pct = 'psutil_error'
-            
             log_entry['system_info'] = {
-                'platform': platform_info,
-                'python_version': python_ver,
-                'memory_usage_mb': memory_mb,
-                'cpu_percent': cpu_pct
+                'platform': platform.system(),
+                'python_version': platform.python_version(),
+                'memory_usage_mb': psutil.Process().memory_info().rss / 1024 / 1024,
+                'cpu_percent': psutil.cpu_percent(interval=None)
             }
         except ImportError:
             # psutil not available in this environment
@@ -84,17 +66,11 @@ def debug_log(message, level="INFO", context=None, data=None):
             log_entry['system_info'] = {
                 'platform': platform.system(),
                 'python_version': platform.python_version(),
-                'memory_usage_mb': 'psutil_not_installed',
-                'cpu_percent': 'psutil_not_installed'
+                'memory_usage_mb': 'unavailable',
+                'cpu_percent': 'unavailable'
             }
-        except Exception as e:
-            import platform
-            log_entry['system_info'] = {
-                'platform': platform.system(),
-                'python_version': platform.python_version(),
-                'memory_usage_mb': f'error_{str(e)[:20]}',
-                'cpu_percent': f'error_{str(e)[:20]}'
-            }
+        except Exception:
+            log_entry['system_info'] = 'unavailable'
     
     # Add stack trace for errors
     if level == 'ERROR':
@@ -382,9 +358,6 @@ def main():
             debug_log_data_processing("Mempool Info", "API Request", mempool_data, mempool_time)
             debug_log(f"Mempool data loaded in {mempool_time}ms", "SUCCESS", "mempool_loading")
             
-            # Store mempool data in session state for other pages to access
-            st.session_state.mempool_data = mempool_data
-            
             # Load mempool stats with timing
             stats_start = time.time()
             debug_log("Loading mempool stats...", "INFO", "mempool_stats")
@@ -488,7 +461,6 @@ def main():
     st.sidebar.title("Navigation")
     tabs = [
         "Why Bitcoin?",
-        "Bitcoin's Future and Destiny",
         "Bitcoin OHLC",
         "Mempool Data",
         "Portfolio Value",
@@ -547,1223 +519,13 @@ def main():
         Its unique combination of scarcity, security, and decentralization makes it the most powerful store of value in human history.
         """)
 
-    elif page == "Bitcoin's Future and Destiny":
-        st.header("🔮 Bitcoin's Future and Destiny")
-        
-        # Import datetime for this section
-        from datetime import datetime, timedelta
-        
-        # Initialize session state for Future and Destiny data
-        if 'bfd_data' not in st.session_state:
-            st.session_state.bfd_data = {}
-        
-        # Add cache for Bitcoin Future metrics with 5-minute TTL
-        @st.cache_data(ttl=300)
-        def cached_get_future_metrics():
-            debug_log("🚀 Initializing Bitcoin Future metrics with enhanced logging...", "INFO", "bitcoin_future_init")
-            
-            from bitcoin_metrics import BitcoinMetrics
-            # Create instance with debug logging
-            btc_metrics = BitcoinMetrics(debug_logger=debug_log)
-            
-            debug_log("📊 Starting comprehensive Bitcoin future metrics collection...", "INFO", "bitcoin_future_start")
-            return btc_metrics.get_comprehensive_metrics()
-        
-        # Refresh button for future metrics
-        col_refresh, col_status = st.columns([1, 3])
-        with col_refresh:
-            if st.button("🔄 Refresh Data", type="secondary", key="future_refresh"):
-                cached_get_future_metrics.clear()
-                st.rerun()
-        
-        # Load comprehensive Bitcoin data
-        with st.spinner("🔄 Loading Bitcoin's future metrics..."):
-            try:
-                debug_log("🚀 Starting Bitcoin Future metrics fetch...", "INFO", "bitcoin_future_metrics_start")
-                metrics = cached_get_future_metrics()
-                debug_log(f"✅ Bitcoin Future metrics loaded successfully with {len(metrics.get('errors', []))} errors", "SUCCESS", "bitcoin_future_metrics_success")
-                
-                with col_status:
-                    if len(metrics.get('errors', [])) == 0:
-                        st.success("✅ All future metrics loaded successfully")
-                    elif len(metrics.get('errors', [])) < 3:
-                        st.warning(f"⚠️ {len(metrics['errors'])} metrics failed to load")
-                    else:
-                        st.error(f"❌ Multiple metrics failed ({len(metrics['errors'])} errors)")
-                
-                # Show errors in expander if any
-                if metrics.get('errors'):
-                    with st.expander(f"🔍 View {len(metrics['errors'])} API Issues"):
-                        for error in metrics['errors']:
-                            st.error(error)
-                
-                # === SECTION 1: KEY SCARCITY INFOGRAPHIC / DASHBOARD ===
-                st.markdown("<br>", unsafe_allow_html=True)
-                st.subheader("💎 Bitcoin Scarcity Dashboard")
-                
-                # Extract data from metrics
-                blockchain_data = metrics.get('blockchain', {})
-                coingecko = metrics.get('coingecko', {})
-                
-                # Calculate key scarcity metrics
-                HARD_CAP = 21_000_000  # Requirement #1: Hard cap display
-                
-                # Requirement #2: Current circulation and remaining to mine
-                if blockchain_data.get('total_supply'):
-                    total_mined = blockchain_data['total_supply'] / 1e8  # Convert from satoshis
-                    remaining_to_mine = HARD_CAP - total_mined
-                    percentage_mined = (total_mined / HARD_CAP) * 100
-                else:
-                    total_mined = None
-                    remaining_to_mine = None
-                    percentage_mined = None
-                
-                # Beautiful scarcity dashboard with custom styling
-                st.markdown("""
-                <style>
-                .scarcity-container {
-                    display: flex;
-                    flex-wrap: wrap;
-                    gap: 15px;
-                    margin: 20px 0;
-                    padding: 25px;
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    border-radius: 15px;
-                    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-                }
-                .scarcity-box {
-                    flex: 1;
-                    min-width: 200px;
-                    background: rgba(255,255,255,0.95);
-                    border-radius: 12px;
-                    padding: 20px;
-                    text-align: center;
-                    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-                    transition: transform 0.3s ease;
-                }
-                .scarcity-box:hover {
-                    transform: translateY(-5px);
-                    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-                }
-                .scarcity-emoji {
-                    font-size: 32px;
-                    margin-bottom: 10px;
-                    display: block;
-                }
-                .scarcity-label {
-                    font-size: 14px;
-                    color: #555;
-                    margin: 8px 0;
-                    font-weight: 600;
-                    text-transform: uppercase;
-                    letter-spacing: 1px;
-                }
-                .scarcity-value {
-                    font-size: 24px;
-                    font-weight: bold;
-                    color: #2c3e50;
-                    margin: 10px 0;
-                    line-height: 1.2;
-                }
-                .scarcity-detail {
-                    font-size: 12px;
-                    color: #7f8c8d;
-                    margin: 5px 0;
-                    line-height: 1.3;
-                }
-                .scarcity-hard-cap {
-                    background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
-                    color: white;
-                }
-                .scarcity-hard-cap .scarcity-label,
-                .scarcity-hard-cap .scarcity-value,
-                .scarcity-hard-cap .scarcity-detail {
-                    color: white;
-                }
-                </style>
-                """, unsafe_allow_html=True)
-                
-                # Generate scarcity dashboard content
-                scarcity_html = '<div class="scarcity-container">'
-                
-                # Hard Cap (Requirement #1)
-                scarcity_html += f'''
-                <div class="scarcity-box scarcity-hard-cap">
-                    <div class="scarcity-emoji">💎</div>
-                    <div class="scarcity-label">Maximum Supply</div>
-                    <div class="scarcity-value">{HARD_CAP:,} BTC</div>
-                    <div class="scarcity-detail">Fixed by Algorithm<br>Never to be Changed</div>
-                </div>'''
-                
-                # Current Mined (Requirement #2)
-                if total_mined is not None:
-                    scarcity_html += f'''
-                    <div class="scarcity-box">
-                        <div class="scarcity-emoji">⛏️</div>
-                        <div class="scarcity-label">Mined So Far</div>
-                        <div class="scarcity-value">{total_mined:,.0f} BTC</div>
-                        <div class="scarcity-detail">{percentage_mined:.2f}% of Total<br>Supply Complete</div>
-                    </div>'''
-                else:
-                    scarcity_html += '''
-                    <div class="scarcity-box">
-                        <div class="scarcity-emoji">⛏️</div>
-                        <div class="scarcity-label">Mined So Far</div>
-                        <div class="scarcity-value">API Failed</div>
-                        <div class="scarcity-detail">Data Unavailable</div>
-                    </div>'''
-                
-                # Remaining to Mine (Requirement #2)
-                if remaining_to_mine is not None:
-                    scarcity_html += f'''
-                    <div class="scarcity-box">
-                        <div class="scarcity-emoji">⏳</div>
-                        <div class="scarcity-label">Left to Mine</div>
-                        <div class="scarcity-value">{remaining_to_mine:,.0f} BTC</div>
-                        <div class="scarcity-detail">{100-percentage_mined:.2f}% Remaining<br>Until ~2140</div>
-                    </div>'''
-                else:
-                    scarcity_html += '''
-                    <div class="scarcity-box">
-                        <div class="scarcity-emoji">⏳</div>
-                        <div class="scarcity-label">Left to Mine</div>
-                        <div class="scarcity-value">API Failed</div>
-                        <div class="scarcity-detail">Data Unavailable</div>
-                    </div>'''
-                
-                # Current Price from CoinGecko
-                if coingecko.get('price_usd'):
-                    price = coingecko['price_usd']
-                    market_cap = price * total_mined if total_mined else None
-                    scarcity_html += f'''
-                    <div class="scarcity-box">
-                        <div class="scarcity-emoji">💰</div>
-                        <div class="scarcity-label">Current Price</div>
-                        <div class="scarcity-value">${price:,.0f}</div>
-                        <div class="scarcity-detail">Market Cap:<br>${market_cap/1e12:.2f}T</div>
-                    </div>''' if market_cap else f'''
-                    <div class="scarcity-box">
-                        <div class="scarcity-emoji">💰</div>
-                        <div class="scarcity-label">Current Price</div>
-                        <div class="scarcity-value">${price:,.0f}</div>
-                        <div class="scarcity-detail">Live Price Data</div>
-                    </div>'''
-                else:
-                    scarcity_html += '''
-                    <div class="scarcity-box">
-                        <div class="scarcity-emoji">💰</div>
-                        <div class="scarcity-label">Current Price</div>
-                        <div class="scarcity-value">API Failed</div>
-                        <div class="scarcity-detail">Price Unavailable</div>
-                    </div>'''
-                
-                scarcity_html += '</div>'
-                
-                # Display the beautiful scarcity dashboard
-                st.markdown(scarcity_html, unsafe_allow_html=True)
-                
-                # Progress bar to 21M (visual representation)
-                if percentage_mined is not None:
-                    st.markdown("### 📊 Mining Progress to 21 Million")
-                    progress_col1, progress_col2 = st.columns([3, 1])
-                    with progress_col1:
-                        st.progress(percentage_mined/100, text=f"{percentage_mined:.3f}% of 21M Bitcoin mined")
-                    with progress_col2:
-                        st.metric("Completion", f"{percentage_mined:.3f}%")
-                
-                # === SECTION 2: HALVING EVENTS AND MINING VISUALIZATION ===
-                st.markdown("<br><br>", unsafe_allow_html=True)
-                st.subheader("⚡ Bitcoin Mining & Halving Events")
-                
-                # Requirement #4: Bitcoin Mining Rate, Block Rewards & Halving Events
-                halving_col1, halving_col2 = st.columns(2)
-                
-                with halving_col1:
-                    # Historical halving data (hardcoded reliable data)
-                    halving_events = [
-                        {"date": "2009-01-03", "block": 0, "reward": 50, "event": "Genesis Block"},
-                        {"date": "2012-11-28", "block": 210000, "reward": 25, "event": "1st Halving"},
-                        {"date": "2016-07-09", "block": 420000, "reward": 12.5, "event": "2nd Halving"},
-                        {"date": "2020-05-11", "block": 630000, "reward": 6.25, "event": "3rd Halving"},
-                        {"date": "2024-04-20", "block": 840000, "reward": 3.125, "event": "4th Halving"},
-                        {"date": "2028-04-20", "block": 1050000, "reward": 1.5625, "event": "5th Halving (Est.)"},
-                        {"date": "2032-04-20", "block": 1260000, "reward": 0.78125, "event": "6th Halving (Est.)"},
-                    ]
-                    
-                    # Create halving timeline chart
-                    import plotly.graph_objects as go
-                    
-                    dates = [datetime.strptime(h["date"], "%Y-%m-%d") for h in halving_events]
-                    rewards = [h["reward"] for h in halving_events]
-                    events = [h["event"] for h in halving_events]
-                    
-                    fig_halving = go.Figure()
-                    fig_halving.add_trace(go.Scatter(
-                        x=dates,
-                        y=rewards,
-                        mode='lines+markers',
-                        name='Block Reward (BTC)',
-                        line=dict(color='#f7931a', width=4),
-                        marker=dict(size=10, color='#f7931a'),
-                        text=events,
-                        hovertemplate='<b>%{text}</b><br>Date: %{x}<br>Reward: %{y} BTC<extra></extra>'
-                    ))
-                    
-                    fig_halving.update_layout(
-                        title="🎁 Block Reward Evolution & Halving Events",
-                        xaxis_title="Year",
-                        yaxis_title="Block Reward (BTC)",
-                        height=400,
-                        template="plotly_dark",
-                        showlegend=False
-                    )
-                    
-                    # Add vertical lines for halving events
-                    for i, event in enumerate(halving_events[1:], 1):  # Skip genesis
-                        fig_halving.add_vline(
-                            x=dates[i], 
-                            line_dash="dash", 
-                            line_color="rgba(255,255,255,0.3)",
-                            annotation_text=f"Halving {i}"
-                        )
-                    
-                    st.plotly_chart(fig_halving, use_container_width=True)
-                
-                with halving_col2:
-                    # Next halving calculation
-                    try:
-                        debug_log("🔄 Starting halving countdown calculation...", "INFO", "halving_calculation_start")
-                        current_blocks = blockchain_data.get('block_count', 0)
-                        debug_log(f"📊 Current block count: {current_blocks}", "DATA", "current_blocks_data")
-                        
-                        if current_blocks > 0:
-                            # Calculate next halving details
-                            blocks_per_halving = 210_000
-                            current_epoch = current_blocks // blocks_per_halving
-                            next_halving_block = (current_epoch + 1) * blocks_per_halving
-                            blocks_to_halving = next_halving_block - current_blocks
-                            
-                            # Estimate time to next halving (10 min average block time)
-                            days_to_halving = (blocks_to_halving * 10) / (60 * 24)
-                            debug_log(f"⏰ Calculated days to halving: {days_to_halving}", "DATA", "days_to_halving_calculation")
-                            
-                            # Current reward calculation
-                            current_reward = 50 / (2 ** current_epoch)
-                            next_reward = current_reward / 2
-                            
-                            debug_log("✅ Halving calculation completed successfully", "SUCCESS", "halving_calculation_success")
-                            
-                            st.markdown("### 📅 Next Halving Countdown")
-                            
-                            # Halving countdown metrics
-                            countdown_col1, countdown_col2 = st.columns(2)
-                            with countdown_col1:
-                                st.metric("⏰ Days Until Halving", f"{days_to_halving:,.0f}")
-                                st.metric("🧱 Blocks Remaining", f"{blocks_to_halving:,}")
-                            with countdown_col2:
-                                st.metric("🎁 Current Reward", f"{current_reward} BTC")
-                                st.metric("⬇️ Next Reward", f"{next_reward} BTC")
-                            
-                            # Progress to next halving
-                            blocks_mined_this_cycle = current_blocks - (current_epoch * blocks_per_halving)
-                            cycle_progress = (blocks_mined_this_cycle / blocks_per_halving) * 100
-                            
-                            st.markdown("#### 📊 Current Halving Cycle Progress")
-                            st.progress(cycle_progress/100, text=f"{cycle_progress:.1f}% to next halving")
-                            
-                            st.caption(f"**Halving Epoch:** {current_epoch + 1}")
-                            st.caption(f"**Next Halving Block:** {next_halving_block:,}")
-                        else:
-                            debug_log("❌ Unable to calculate halving data - block count is 0", "ERROR", "halving_calculation_no_blocks")
-                            st.error("❌ Unable to calculate halving data - API failed")
-                    except Exception as e:
-                        error_msg = f"Failed to calculate halving data: {str(e)}"
-                        debug_log(f"💥 Halving calculation error: {error_msg}", "ERROR", "halving_calculation_exception", {"error": str(e)})
-                        st.error(f"❌ {error_msg}")
-                        # Show fallback content
-                        st.info("📅 Next halving estimated for 2028 (approximate)")
-                        st.info("🎁 Current block reward: 3.125 BTC")
-                
-                # === SECTION 3: BITCOIN SUPPLY PROJECTION TO 2140 ===
-                st.markdown("<br><br>", unsafe_allow_html=True)
-                st.subheader("📈 Bitcoin Supply Projection to 2140")
-                
-                # Requirement #3: Bitcoins Left to Be Mined Over Time
-                # Generate projection data
-                def calculate_supply_projection():
-                    """Calculate Bitcoin supply projection to 2140"""
-                    years = []
-                    btc_mined = []
-                    btc_remaining = []
-                    
-                    # Starting parameters
-                    current_year = 2025
-                    current_supply = total_mined if total_mined else 19_800_000  # Fallback estimate
-                    
-                    # Halving schedule (every 4 years approximately)
-                    halving_years = [2028, 2032, 2036, 2040, 2044, 2048, 2052, 2056, 2060, 2064, 2068, 2072, 2076, 2080, 2084, 2088, 2092, 2096, 2100, 2104, 2108, 2112, 2116, 2120, 2124, 2128, 2132, 2136, 2140]
-                    current_reward = 3.125  # Post-2024 halving
-                    
-                    for year in range(current_year, 2141):
-                        # Check if it's a halving year
-                        if year in halving_years:
-                            current_reward = current_reward / 2
-                        
-                        # Calculate approximate BTC mined this year
-                        blocks_per_year = 365.25 * 24 * 6  # ~6 blocks per hour on average
-                        btc_this_year = blocks_per_year * current_reward
-                        current_supply += btc_this_year
-                        
-                        # Ensure we don't exceed 21M
-                        if current_supply > HARD_CAP:
-                            current_supply = HARD_CAP
-                        
-                        years.append(year)
-                        btc_mined.append(current_supply)
-                        btc_remaining.append(HARD_CAP - current_supply)
-                    
-                    return years, btc_mined, btc_remaining
-                
-                # Generate projection
-                years, btc_mined, btc_remaining = calculate_supply_projection()
-                
-                # Create supply projection chart
-                fig_projection = go.Figure()
-                
-                # Add mined Bitcoin
-                fig_projection.add_trace(go.Scatter(
-                    x=years,
-                    y=btc_mined,
-                    mode='lines',
-                    name='Total Mined',
-                    line=dict(color='#00d4aa', width=3),
-                    fill='tonexty'
-                ))
-                
-                # Add remaining Bitcoin
-                fig_projection.add_trace(go.Scatter(
-                    x=years,
-                    y=btc_remaining,
-                    mode='lines',
-                    name='Remaining to Mine',
-                    line=dict(color='#ff6b35', width=3),
-                    fill='tozeroy'
-                ))
-                
-                # Add 21M cap line
-                fig_projection.add_hline(
-                    y=HARD_CAP, 
-                    line_dash="dash", 
-                    line_color="white",
-                    annotation_text="21 Million Cap"
-                )
-                
-                fig_projection.update_layout(
-                    title="📊 Bitcoin Supply Evolution to 2140",
-                    xaxis_title="Year",
-                    yaxis_title="Bitcoin (BTC)",
-                    height=500,
-                    template="plotly_dark",
-                    hovermode='x unified'
-                )
-                
-                st.plotly_chart(fig_projection, use_container_width=True)
-                
-                # Year slider for projection exploration (Requirement #3: Session State)
-                st.markdown("#### 🔍 Explore Supply Projection")
-                year_range = st.slider(
-                    "Select Year Range for Detailed View",
-                    min_value=2025,
-                    max_value=2140,
-                    value=(2025, 2050),
-                    step=5,
-                    key="year_range_slider"
-                )
-                
-                # Filtered projection based on slider
-                start_idx = year_range[0] - 2025
-                end_idx = year_range[1] - 2025 + 1
-                
-                filtered_years = years[start_idx:end_idx]
-                filtered_mined = btc_mined[start_idx:end_idx]
-                filtered_remaining = btc_remaining[start_idx:end_idx]
-                
-                if filtered_years:
-                    projection_col1, projection_col2, projection_col3 = st.columns(3)
-                    with projection_col1:
-                        st.metric(
-                            f"📅 BTC Mined by {year_range[1]}", 
-                            f"{filtered_mined[-1]:,.0f}",
-                            delta=f"+{filtered_mined[-1] - filtered_mined[0]:,.0f} from {year_range[0]}"
-                        )
-                    with projection_col2:
-                        st.metric(
-                            f"⏳ Remaining in {year_range[1]}", 
-                            f"{filtered_remaining[-1]:,.0f}",
-                            delta=f"-{filtered_remaining[0] - filtered_remaining[-1]:,.0f} mined"
-                        )
-                    with projection_col3:
-                        completion_percent = (filtered_mined[-1] / HARD_CAP) * 100
-                        st.metric(
-                            f"📊 Completion by {year_range[1]}", 
-                            f"{completion_percent:.2f}%"
-                        )
-                
-                # Store projection data in session state
-                st.session_state.bfd_data['supply_projection'] = {
-                    'years': years,
-                    'mined': btc_mined,
-                    'remaining': btc_remaining
-                }
-                
-                # === SECTION 5: MEMPOOL AND TRANSACTION ANALYSIS ===
-                st.markdown("<br><br>", unsafe_allow_html=True)
-                st.subheader("📦 Mempool & Transaction Analysis")
-                
-                # Requirement #5: Mempool Data (Live and Historic) & #12: Transaction Fees and Congestion
-                mempool_col1, mempool_col2 = st.columns(2)
-                
-                with mempool_col1:
-                    # Get mempool data (reuse existing functionality)
-                    try:
-                        # Use the already available mempool_data from session state
-                        mempool_info = st.session_state.get('mempool_data', {})
-                        if not mempool_info or 'error' in mempool_info:
-                            # Fallback: call the function directly since it's in the same module
-                            mempool_info = cached_get_mempool_info()
-                            # Store it back in session state for future use
-                            st.session_state.mempool_data = mempool_info
-                        
-                        if 'error' not in mempool_info and 'fees' in mempool_info:
-                            fees = mempool_info['fees']
-                            
-                            # Create fee progression chart
-                            fee_labels = ['Economy', 'Low Priority', 'Medium Priority', 'High Priority']
-                            fee_values = [fees['economyFee'], fees['hourFee'], fees['halfHourFee'], fees['fastestFee']]
-                            fee_colors = ['#3498db', '#2ecc71', '#f39c12', '#e74c3c']
-                            
-                            fig_fees = go.Figure()
-                            fig_fees.add_trace(go.Bar(
-                                x=fee_labels,
-                                y=fee_values,
-                                marker_color=fee_colors,
-                                text=[f"{fee} sat/vB" for fee in fee_values],
-                                textposition='auto',
-                                hovertemplate='<b>%{x}</b><br>Fee: %{y} sat/vB<extra></extra>'
-                            ))
-                            
-                            fig_fees.update_layout(
-                                title="💳 Current Transaction Fee Levels",
-                                xaxis_title="Priority Level",
-                                yaxis_title="Fee (sat/vB)",
-                                height=400,
-                                template="plotly_dark",
-                                showlegend=False
-                            )
-                            
-                            st.plotly_chart(fig_fees, use_container_width=True)
-                            
-                            # Fee metrics
-                            fee_metric_col1, fee_metric_col2 = st.columns(2)
-                            with fee_metric_col1:
-                                avg_fee = sum(fee_values) / len(fee_values)
-                                st.metric("📊 Average Fee", f"{avg_fee:.0f} sat/vB")
-                            with fee_metric_col2:
-                                fee_range = max(fee_values) - min(fee_values)
-                                st.metric("📈 Fee Range", f"{fee_range} sat/vB")
-                        else:
-                            st.error("❌ Mempool fee data unavailable")
-                    except Exception as e:
-                        st.error(f"❌ Failed to load mempool data: {e}")
-                
-                with mempool_col2:
-                    # Mempool size visualization
-                    try:
-                        if 'error' not in mempool_info and 'mempool_blocks' in mempool_info:
-                            blocks_data = mempool_info['mempool_blocks'][:10]
-                            
-                            # Create mempool blocks chart
-                            fig_mempool = go.Figure()
-                            fig_mempool.add_trace(go.Scatter(
-                                x=[f"Block {i+1}" for i in range(len(blocks_data))],
-                                y=[block['nTx'] for block in blocks_data],
-                                mode='lines+markers',
-                                name='Pending Transactions',
-                                line=dict(color='#9b59b6', width=3),
-                                marker=dict(size=8, color='#9b59b6'),
-                                fill='tozeroy',
-                                hovertemplate='<b>%{x}</b><br>Transactions: %{y}<extra></extra>'
-                            ))
-                            
-                            fig_mempool.update_layout(
-                                title="📦 Mempool Congestion (Next 10 Blocks)",
-                                xaxis_title="Upcoming Blocks",
-                                yaxis_title="Transaction Count",
-                                height=400,
-                                template="plotly_dark",
-                                showlegend=False
-                            )
-                            
-                            st.plotly_chart(fig_mempool, use_container_width=True)
-                            
-                            # Mempool metrics
-                            total_pending = sum(block['nTx'] for block in blocks_data)
-                            mempool_metric_col1, mempool_metric_col2 = st.columns(2)
-                            with mempool_metric_col1:
-                                st.metric("⏳ Total Pending", f"{total_pending:,}")
-                            with mempool_metric_col2:
-                                avg_per_block = total_pending / len(blocks_data) if blocks_data else 0
-                                st.metric("📊 Avg per Block", f"{avg_per_block:.0f}")
-                        else:
-                            st.error("❌ Mempool block data unavailable")
-                    except Exception as e:
-                        st.error(f"❌ Failed to load mempool blocks: {e}")
-                
-                # === SECTION 6: BITCOIN ADOPTION METRICS ===
-                st.markdown("<br><br>", unsafe_allow_html=True)
-                st.subheader("🌍 Bitcoin Adoption & Network Growth")
-                
-                # Requirement #6: Active Bitcoin Wallet Addresses Over Time
-                # Requirement #7: Global Bitcoin Adoption and User Growth
-                adoption_col1, adoption_col2 = st.columns(2)
-                
-                with adoption_col1:
-                    st.markdown("#### 🏦 Active Wallet Growth Estimate")
-                    
-                    # Generate estimated wallet growth data (based on historical patterns)
-                    def generate_wallet_estimates():
-                        years = list(range(2010, 2026))
-                        # Estimated active addresses growth based on historical data
-                        wallets = [
-                            1000, 5000, 15000, 50000, 150000, 300000, 600000,  # 2010-2016
-                            1200000, 2500000, 5000000, 8000000, 12000000,      # 2017-2021
-                            15000000, 18000000, 22000000, 28000000             # 2022-2025
-                        ]
-                        return years, wallets
-                    
-                    years, wallet_estimates = generate_wallet_estimates()
-                    
-                    fig_wallets = go.Figure()
-                    fig_wallets.add_trace(go.Scatter(
-                        x=years,
-                        y=wallet_estimates,
-                        mode='lines+markers',
-                        name='Active Wallets',
-                        line=dict(color='#1abc9c', width=3),
-                        marker=dict(size=6),
-                        fill='tozeroy',
-                        hovertemplate='<b>%{x}</b><br>Est. Active Wallets: %{y:,}<extra></extra>'
-                    ))
-                    
-                    fig_wallets.update_layout(
-                        title="🏦 Bitcoin Active Wallet Growth",
-                        xaxis_title="Year",
-                        yaxis_title="Estimated Active Wallets",
-                        height=350,
-                        template="plotly_dark",
-                        showlegend=False
-                    )
-                    
-                    st.plotly_chart(fig_wallets, use_container_width=True)
-                    
-                    # Current wallet metrics
-                    if wallet_estimates:
-                        current_wallets = wallet_estimates[-1]
-                        prev_year_wallets = wallet_estimates[-2] if len(wallet_estimates) > 1 else 0
-                        growth = current_wallets - prev_year_wallets
-                        st.metric("🔢 Est. Active Wallets (2025)", f"{current_wallets:,}", delta=f"+{growth:,} from 2024")
-                
-                with adoption_col2:
-                    st.markdown("#### 🌍 Global Adoption Estimates")
-                    
-                    # Global adoption data (estimated percentages by region)
-                    regions = ['North America', 'Europe', 'Asia Pacific', 'Latin America', 'Africa', 'Middle East']
-                    adoption_rates = [16.0, 12.0, 8.5, 14.0, 4.5, 6.0]  # Estimated % of population
-                    region_colors = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c']
-                    
-                    fig_adoption = go.Figure()
-                    fig_adoption.add_trace(go.Bar(
-                        x=regions,
-                        y=adoption_rates,
-                        marker_color=region_colors,
-                        text=[f"{rate}%" for rate in adoption_rates],
-                        textposition='auto',
-                        hovertemplate='<b>%{x}</b><br>Adoption Rate: %{y}%<extra></extra>'
-                    ))
-                    
-                    fig_adoption.update_layout(
-                        title="🌍 Bitcoin Adoption by Region",
-                        xaxis_title="Region",
-                        yaxis_title="Estimated Adoption Rate (%)",
-                        height=350,
-                        template="plotly_dark",
-                        showlegend=False,
-                        xaxis=dict(tickangle=45)
-                    )
-                    
-                    st.plotly_chart(fig_adoption, use_container_width=True)
-                    
-                    # Adoption metrics
-                    avg_adoption = sum(adoption_rates) / len(adoption_rates)
-                    max_region = regions[adoption_rates.index(max(adoption_rates))]
-                    st.metric("📊 Global Average", f"{avg_adoption:.1f}%")
-                    st.metric("🏆 Leading Region", max_region)
-                
-                # === SECTION 7: BITCOIN SUPPLY DISTRIBUTION ===
-                st.markdown("<br><br>", unsafe_allow_html=True)
-                st.subheader("💎 Bitcoin Supply Distribution")
-                
-                # Requirement #8: Illiquid Bitcoin Supply Estimation
-                # Requirement #9: Holder Behavior: Long-term vs. Short-term
-                supply_col1, supply_col2 = st.columns(2)
-                
-                with supply_col1:
-                    st.markdown("#### 🔒 Liquid vs. Illiquid Supply")
-                    
-                    # Estimated supply distribution
-                    if total_mined is not None:
-                        # Estimated breakdown based on on-chain analysis
-                        lost_btc = total_mined * 0.20      # ~20% estimated lost forever
-                        hodled_btc = total_mined * 0.45    # ~45% held long-term (>1 year)
-                        liquid_btc = total_mined * 0.35    # ~35% actively traded
-                        
-                        supply_labels = ['Lost Forever', 'Long-term Hold', 'Liquid Supply']
-                        supply_values = [lost_btc, hodled_btc, liquid_btc]
-                        supply_colors = ['#95a5a6', '#3498db', '#2ecc71']
-                        
-                        fig_supply = go.Figure()
-                        fig_supply.add_trace(go.Pie(
-                            labels=supply_labels,
-                            values=supply_values,
-                            hole=0.4,
-                            marker_colors=supply_colors,
-                            textinfo='label+percent+value',
-                            texttemplate='<b>%{label}</b><br>%{percent}<br>%{value:,.0f} BTC',
-                            hovertemplate='<b>%{label}</b><br>%{value:,.0f} BTC<br>%{percent}<extra></extra>'
-                        ))
-                        
-                        fig_supply.update_layout(
-                            title="💎 Bitcoin Supply Distribution",
-                            height=400,
-                            template="plotly_dark",
-                            showlegend=False
-                        )
-                        
-                        st.plotly_chart(fig_supply, use_container_width=True)
-                        
-                        # Supply metrics
-                        supply_metric_col1, supply_metric_col2 = st.columns(2)
-                        with supply_metric_col1:
-                            st.metric("💧 Liquid Supply", f"{liquid_btc:,.0f} BTC", 
-                                    delta=f"{(liquid_btc/total_mined)*100:.1f}% of total")
-                        with supply_metric_col2:
-                            st.metric("🔒 Illiquid Supply", f"{lost_btc + hodled_btc:,.0f} BTC",
-                                    delta=f"{((lost_btc + hodled_btc)/total_mined)*100:.1f}% of total")
-                    else:
-                        st.error("❌ Supply distribution data unavailable")
-                
-                with supply_col2:
-                    st.markdown("#### 💎 Holder Behavior Analysis")
-                    
-                    # Generate holder behavior timeline
-                    timeline_years = list(range(2018, 2026))
-                    diamond_hands = [25, 30, 35, 42, 48, 52, 58, 63]  # % long-term holders
-                    paper_hands = [75, 70, 65, 58, 52, 48, 42, 37]   # % short-term holders
-                    
-                    fig_holders = go.Figure()
-                    
-                    # Diamond hands (long-term holders)
-                    fig_holders.add_trace(go.Scatter(
-                        x=timeline_years,
-                        y=diamond_hands,
-                        mode='lines+markers',
-                        name='Diamond Hands (>1yr)',
-                        line=dict(color='#3498db', width=3),
-                        marker=dict(size=8),
-                        fill='tonexty',
-                        stackgroup='one'
-                    ))
-                    
-                    # Paper hands (short-term holders)
-                    fig_holders.add_trace(go.Scatter(
-                        x=timeline_years,
-                        y=paper_hands,
-                        mode='lines+markers',
-                        name='Paper Hands (<1yr)',
-                        line=dict(color='#e74c3c', width=3),
-                        marker=dict(size=8),
-                        fill='tozeroy',
-                        stackgroup='one'
-                    ))
-                    
-                    fig_holders.update_layout(
-                        title="💎 Holder Behavior Evolution",
-                        xaxis_title="Year",
-                        yaxis_title="Percentage of Supply",
-                        height=400,
-                        template="plotly_dark",
-                        legend=dict(x=0.02, y=0.98),
-                        hovermode='x unified'
-                    )
-                    
-                    st.plotly_chart(fig_holders, use_container_width=True)
-                    
-                    # Holder metrics
-                    current_diamond = diamond_hands[-1]
-                    current_paper = paper_hands[-1]
-                    holder_metric_col1, holder_metric_col2 = st.columns(2)
-                    with holder_metric_col1:
-                        st.metric("💎 Diamond Hands", f"{current_diamond}%", 
-                                delta=f"+{diamond_hands[-1] - diamond_hands[0]}% since 2018")
-                    with holder_metric_col2:
-                        st.metric("📄 Paper Hands", f"{current_paper}%",
-                                delta=f"{paper_hands[-1] - paper_hands[0]}% since 2018")
-                
-                # === SECTION 8: INSTITUTIONAL ADOPTION ===
-                st.markdown("<br><br>", unsafe_allow_html=True)
-                st.subheader("🏢 Institutional & Corporate Adoption")
-                
-                # Requirement #11: Institutional and Key Holder Accumulation
-                institutional_col1, institutional_col2 = st.columns(2)
-                
-                with institutional_col1:
-                    st.markdown("#### 🏛️ Major Corporate Holdings")
-                    
-                    # Major known institutional holders (approximate data)
-                    institutions = [
-                        {"name": "MicroStrategy", "btc": 190000, "type": "Corporate"},
-                        {"name": "Tesla", "btc": 40000, "type": "Corporate"},
-                        {"name": "Block Inc", "btc": 8000, "type": "Corporate"},
-                        {"name": "Marathon Digital", "btc": 15000, "type": "Mining"},
-                        {"name": "Coinbase", "btc": 9000, "type": "Exchange"},
-                        {"name": "Riot Platforms", "btc": 8000, "type": "Mining"}
-                    ]
-                    
-                    # Create institutional holdings chart
-                    names = [inst["name"] for inst in institutions]
-                    holdings = [inst["btc"] for inst in institutions]
-                    types = [inst["type"] for inst in institutions]
-                    
-                    # Color by type
-                    type_colors = {"Corporate": "#3498db", "Mining": "#e74c3c", "Exchange": "#2ecc71"}
-                    colors = [type_colors.get(t, "#95a5a6") for t in types]
-                    
-                    fig_institutions = go.Figure()
-                    fig_institutions.add_trace(go.Bar(
-                        y=names,
-                        x=holdings,
-                        orientation='h',
-                        marker_color=colors,
-                        text=[f"{h:,} BTC" for h in holdings],
-                        textposition='auto',
-                        hovertemplate='<b>%{y}</b><br>Holdings: %{x:,} BTC<extra></extra>'
-                    ))
-                    
-                    fig_institutions.update_layout(
-                        title="🏢 Major Institutional Bitcoin Holdings",
-                        xaxis_title="Bitcoin Holdings",
-                        height=400,
-                        template="plotly_dark",
-                        showlegend=False
-                    )
-                    
-                    st.plotly_chart(fig_institutions, use_container_width=True)
-                    
-                    # Institutional metrics
-                    total_institutional = sum(holdings)
-                    institutional_metric_col1, institutional_metric_col2 = st.columns(2)
-                    with institutional_metric_col1:
-                        st.metric("🏢 Total Institutional", f"{total_institutional:,} BTC")
-                    with institutional_metric_col2:
-                        if total_mined:
-                            institutional_percent = (total_institutional / total_mined) * 100
-                            st.metric("📊 % of Supply", f"{institutional_percent:.2f}%")
-                
-                with institutional_col2:
-                    st.markdown("#### 📈 Institutional Adoption Timeline")
-                    
-                    # Institutional adoption timeline
-                    adoption_years = [2020, 2021, 2022, 2023, 2024, 2025]
-                    institutional_count = [5, 15, 25, 35, 45, 55]  # Number of institutions
-                    institutional_holdings_timeline = [50000, 150000, 220000, 280000, 320000, 370000]  # BTC holdings
-                    
-                    fig_timeline = go.Figure()
-                    
-                    # Number of institutions (left y-axis)
-                    fig_timeline.add_trace(go.Scatter(
-                        x=adoption_years,
-                        y=institutional_count,
-                        mode='lines+markers',
-                        name='Number of Institutions',
-                        line=dict(color='#3498db', width=3),
-                        marker=dict(size=8),
-                        yaxis='y'
-                    ))
-                    
-                    # Total holdings (right y-axis)
-                    fig_timeline.add_trace(go.Scatter(
-                        x=adoption_years,
-                        y=institutional_holdings_timeline,
-                        mode='lines+markers',
-                        name='Total Holdings (BTC)',
-                        line=dict(color='#e74c3c', width=3),
-                        marker=dict(size=8),
-                        yaxis='y2'
-                    ))
-                    
-                    fig_timeline.update_layout(
-                        title="📈 Institutional Adoption Growth",
-                        xaxis_title="Year",
-                        height=400,
-                        template="plotly_dark",
-                        legend=dict(x=0.02, y=0.98),
-                        yaxis=dict(title='Number of Institutions', side='left'),
-                        yaxis2=dict(title='Total Holdings (BTC)', side='right', overlaying='y'),
-                        hovermode='x unified'
-                    )
-                    
-                    st.plotly_chart(fig_timeline, use_container_width=True)
-                    
-                    # Timeline metrics
-                    current_institutions = institutional_count[-1]
-                    current_holdings = institutional_holdings_timeline[-1]
-                    timeline_metric_col1, timeline_metric_col2 = st.columns(2)
-                    with timeline_metric_col1:
-                        st.metric("🏢 Active Institutions", f"{current_institutions}",
-                                delta=f"+{current_institutions - institutional_count[0]} since 2020")
-                    with timeline_metric_col2:
-                        st.metric("💰 Combined Holdings", f"{current_holdings:,} BTC",
-                                delta=f"+{current_holdings - institutional_holdings_timeline[0]:,} since 2020")
-                
-                # === SECTION 9: SCENARIO SIMULATOR ===
-                st.markdown("<br><br>", unsafe_allow_html=True)
-                st.subheader("🎮 Bitcoin Future Scenario Simulator")
-                
-                # Requirement #15: Scenario Simulator
-                with st.expander("🔬 Explore Future Bitcoin Scenarios", expanded=False):
-                    st.markdown("#### 🎯 Adjust Parameters to Model Different Futures")
-                    
-                    sim_col1, sim_col2, sim_col3 = st.columns(3)
-                    
-                    with sim_col1:
-                        # Adoption parameters
-                        st.markdown("**📈 Adoption Scenarios**")
-                        adoption_rate = st.slider(
-                            "Annual Adoption Growth",
-                            min_value=5.0, max_value=50.0, value=15.0, step=5.0,
-                            help="Percentage growth in new users per year",
-                            key="adoption_rate_slider"
-                        )
-                        
-                        institutional_growth = st.slider(
-                            "Institutional Growth Rate",
-                            min_value=10.0, max_value=100.0, value=25.0, step=10.0,
-                            help="Percentage growth in institutional adoption",
-                            key="institutional_growth_slider"
-                        )
-                    
-                    with sim_col2:
-                        # Supply dynamics
-                        st.markdown("**💎 Supply Dynamics**")
-                        hodl_rate = st.slider(
-                            "HODLing Rate",
-                            min_value=30.0, max_value=80.0, value=55.0, step=5.0,
-                            help="Percentage of supply held long-term",
-                            key="hodl_rate_slider"
-                        )
-                        
-                        lost_btc_rate = st.slider(
-                            "Lost Bitcoin Rate",
-                            min_value=15.0, max_value=30.0, value=20.0, step=1.0,
-                            help="Percentage of total supply lost forever",
-                            key="lost_btc_slider"
-                        )
-                    
-                    with sim_col3:
-                        # Market scenarios
-                        st.markdown("**💰 Market Scenarios**")
-                        price_scenario = st.selectbox(
-                            "Price Growth Scenario",
-                            ["Conservative (10% annual)", "Moderate (25% annual)", "Aggressive (50% annual)", "Parabolic (100% annual)"],
-                            index=1,
-                            key="price_scenario_select"
-                        )
-                        
-                        regulation_impact = st.selectbox(
-                            "Regulatory Environment",
-                            ["Hostile (-20% adoption)", "Neutral (0% impact)", "Favorable (+30% adoption)", "Very Favorable (+50% adoption)"],
-                            index=2,
-                            key="regulation_select"
-                        )
-                    
-                    # Calculate scenario projections
-                    if st.button("🚀 Run Scenario Simulation", type="primary"):
-                        # Import plotly for scenario visualization
-                        import plotly.graph_objects as go
-                        
-                        # Extract parameters
-                        price_multipliers = {"Conservative (10% annual)": 1.10, "Moderate (25% annual)": 1.25, "Aggressive (50% annual)": 1.50, "Parabolic (100% annual)": 2.00}
-                        reg_multipliers = {"Hostile (-20% adoption)": 0.8, "Neutral (0% impact)": 1.0, "Favorable (+30% adoption)": 1.3, "Very Favorable (+50% adoption)": 1.5}
-                        
-                        price_mult = price_multipliers[price_scenario]
-                        reg_mult = reg_multipliers[regulation_impact]
-                        
-                        # Project 10 years into the future
-                        sim_years = list(range(2025, 2036))
-                        projected_price = [100000]  # Starting price assumption
-                        projected_adoption = [30000000]  # Starting users assumption
-                        
-                        for year in range(1, 11):
-                            # Price projection
-                            new_price = projected_price[-1] * price_mult
-                            projected_price.append(new_price)
-                            
-                            # Adoption projection
-                            growth_factor = (adoption_rate / 100) * reg_mult
-                            new_adoption = projected_adoption[-1] * (1 + growth_factor)
-                            projected_adoption.append(new_adoption)
-                        
-                        # Create scenario visualization
-                        scenario_fig = go.Figure()
-                        
-                        # Price projection (left y-axis)
-                        scenario_fig.add_trace(go.Scatter(
-                            x=sim_years,
-                            y=projected_price,
-                            mode='lines+markers',
-                            name='Bitcoin Price (USD)',
-                            line=dict(color='#f7931a', width=4),
-                            marker=dict(size=8),
-                            yaxis='y'
-                        ))
-                        
-                        # Adoption projection (right y-axis)
-                        scenario_fig.add_trace(go.Scatter(
-                            x=sim_years,
-                            y=[a/1e6 for a in projected_adoption],  # Convert to millions
-                            mode='lines+markers',
-                            name='Global Users (Millions)',
-                            line=dict(color='#2ecc71', width=4),
-                            marker=dict(size=8),
-                            yaxis='y2'
-                        ))
-                        
-                        scenario_fig.update_layout(
-                            title=f"🔮 Bitcoin Future Scenario: {price_scenario} + {regulation_impact}",
-                            xaxis_title="Year",
-                            height=500,
-                            template="plotly_dark",
-                            legend=dict(x=0.02, y=0.98),
-                            yaxis=dict(title='Bitcoin Price (USD)', side='left', type='log'),
-                            yaxis2=dict(title='Global Users (Millions)', side='right', overlaying='y'),
-                            hovermode='x unified'
-                        )
-                        
-                        st.plotly_chart(scenario_fig, use_container_width=True)
-                        
-                        # Scenario summary
-                        st.markdown("#### 📊 Scenario Summary")
-                        summary_col1, summary_col2, summary_col3, summary_col4 = st.columns(4)
-                        
-                        with summary_col1:
-                            final_price = projected_price[-1]
-                            st.metric("💰 2035 Price", f"${final_price:,.0f}", 
-                                    delta=f"{((final_price/projected_price[0])-1)*100:.0f}% total return")
-                        
-                        with summary_col2:
-                            final_users = projected_adoption[-1]
-                            st.metric("👥 2035 Users", f"{final_users/1e6:.0f}M", 
-                                    delta=f"{((final_users/projected_adoption[0])-1)*100:.0f}% growth")
-                        
-                        with summary_col3:
-                            if total_mined:
-                                liquid_supply = total_mined * (100 - hodl_rate - lost_btc_rate) / 100
-                                st.metric("💧 Liquid Supply", f"{liquid_supply:,.0f} BTC",
-                                        delta=f"{(liquid_supply/total_mined)*100:.1f}% of total")
-                        
-                        with summary_col4:
-                            market_cap_2035 = final_price * (total_mined if total_mined else 21000000)
-                            st.metric("🏛️ 2035 Market Cap", f"${market_cap_2035/1e12:.1f}T")
-                        
-                        # Store scenario results in session state
-                        st.session_state.bfd_data['scenario_results'] = {
-                            'years': sim_years,
-                            'prices': projected_price,
-                            'adoption': projected_adoption,
-                            'parameters': {
-                                'adoption_rate': adoption_rate,
-                                'price_scenario': price_scenario,
-                                'regulation_impact': regulation_impact,
-                                'hodl_rate': hodl_rate,
-                                'lost_btc_rate': lost_btc_rate
-                            }
-                        }
-                    
-                    # Reset button
-                    if st.button("🔄 Reset to Defaults", type="secondary"):
-                        st.rerun()
-                
-                # === SECTION 4: GLOSSARY / HELP SECTION ===
-                st.markdown("<br><br>", unsafe_allow_html=True)
-                st.subheader("📚 Bitcoin Future Glossary")
-                
-                # Requirement #14: Glossary with expandable definitions
-                with st.expander("🔍 Key Terms & Definitions"):
-                    st.markdown("""
-                    **🧱 Halving:** An event that occurs approximately every 4 years where the Bitcoin block reward is cut in half, reducing the rate of new Bitcoin creation.
-                    
-                    **⛏️ Mining:** The process of validating Bitcoin transactions and adding them to the blockchain, rewarded with newly minted Bitcoin.
-                    
-                    **🎁 Block Reward:** The amount of Bitcoin awarded to miners for successfully mining a block. Started at 50 BTC and halves every 210,000 blocks.
-                    
-                    **💎 Hard Cap:** Bitcoin's maximum supply limit of 21 million coins, algorithmically enforced and unchangeable.
-                    
-                    **📊 Circulating Supply:** The total amount of Bitcoin currently mined and in circulation.
-                    
-                    **⏳ Remaining Supply:** The amount of Bitcoin yet to be mined, decreasing over time until ~2140.
-                    
-                    **🔗 Blockchain:** The decentralized ledger that records all Bitcoin transactions in chronological order.
-                    
-                    **⚡ Block Time:** The average time between Bitcoin blocks, targeted at 10 minutes through difficulty adjustments.
-                    
-                    **📦 Mempool:** The pool of unconfirmed transactions waiting to be included in the next block.
-                    
-                    **💳 Transaction Fees:** The fee paid to miners for processing a transaction, measured in satoshis per virtual byte (sat/vB).
-                    
-                    **🏦 Active Wallets:** Bitcoin addresses that have received or sent transactions within a specific timeframe.
-                    
-                    **🔒 Illiquid Supply:** Bitcoin that is held long-term and rarely traded, including lost coins and long-term holdings.
-                    
-                    **💧 Liquid Supply:** Bitcoin that is actively traded and available for transactions on exchanges.
-                    
-                    **💎 Diamond Hands:** Long-term Bitcoin holders who rarely sell, typically holding for over one year.
-                    
-                    **📄 Paper Hands:** Short-term Bitcoin holders who trade more frequently, typically holding for less than one year.
-                    
-                    **🏢 Institutional Adoption:** Large-scale adoption of Bitcoin by corporations, financial institutions, and government entities.
-                    
-                    **📈 HODLing:** A strategy of holding Bitcoin long-term regardless of price volatility (originally a misspelling of "hold").
-                    
-                    **🌍 Global Adoption:** The worldwide acceptance and use of Bitcoin across different countries and regions.
-                    
-                    **⚖️ Regulatory Environment:** Government policies and regulations that affect Bitcoin adoption and usage.
-                    """)
-                
-                # Advanced features info
-                with st.expander("🔬 About the Scenario Simulator"):
-                    st.markdown("""
-                    **🎮 Purpose:** The scenario simulator allows you to model different possible futures for Bitcoin based on various parameters.
-                    
-                    **📊 Parameters Explained:**
-                    - **Adoption Growth:** How fast new users join the Bitcoin network annually
-                    - **Institutional Growth:** Rate at which corporations and institutions adopt Bitcoin
-                    - **HODLing Rate:** Percentage of Bitcoin held long-term vs. actively traded
-                    - **Lost Bitcoin:** Coins that are permanently inaccessible due to lost keys
-                    - **Price Scenarios:** Different growth trajectories based on market conditions
-                    - **Regulatory Impact:** How government policies affect adoption rates
-                    
-                    **🎯 How to Use:**
-                    1. Adjust the sliders to reflect your beliefs about Bitcoin's future
-                    2. Select price and regulatory scenarios
-                    3. Click "Run Scenario Simulation" to see projections
-                    4. Results show price, adoption, and market cap projections to 2035
-                    
-                    **⚠️ Disclaimer:** These are theoretical projections based on your inputs, not financial advice.
-                    """)
-                
-                # Data sources and methodology
-                with st.expander("📡 Data Sources & Methodology"):
-                    st.markdown("""
-                    **🔄 Real-time Data Sources:**
-                    - **CoinGecko API:** Price data, market cap, volume
-                    - **Blockchain.info API:** Block count, difficulty, total supply
-                    - **Mempool.space API:** Transaction fees, mempool data
-                    
-                    **📊 Estimated Data:**
-                    - **Wallet Growth:** Based on historical on-chain analysis and industry reports
-                    - **Supply Distribution:** Estimates from blockchain analytics and academic research
-                    - **Adoption Rates:** Based on surveys from Triple-A and other research firms
-                    - **Institutional Holdings:** Public filings and announced holdings
-                    
-                    **🧮 Calculation Methods:**
-                    - **Supply Projections:** Mathematical modeling using halving schedule and block times
-                    - **Halving Countdown:** Block-based calculations with 10-minute average block time
-                    - **Scenario Modeling:** Compound growth models with adjustable parameters
-                    
-                    **🔄 Update Frequency:**
-                    - **Real-time Data:** Cached for 5 minutes, refreshable on demand
-                    - **Estimated Data:** Updated periodically based on new research
-                    - **Historical Data:** Static, sourced from reliable blockchain data providers
-                    """)
-                
-                # Data sources and refresh info
-                st.markdown("<br>", unsafe_allow_html=True)
-                st.divider()
-                col_time, col_sources = st.columns(2)
-                with col_time:
-                    st.caption(f"🕐 Data refreshed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-                with col_sources:
-                    st.caption("📡 Sources: CoinGecko, Blockchain.info, Historical Halving Data")
-                
-            except Exception as e:
-                st.error(f"❌ Failed to load Bitcoin future metrics: {str(e)}")
-                st.info("🔄 Please try refreshing the page or check your internet connection.")
-                
-                # Fallback content when APIs fail
-                st.markdown("### 💎 Bitcoin Scarcity Facts (Offline)")
-                st.info("""
-                **Key Facts About Bitcoin's Future:**
-                - 🏆 Maximum supply: 21,000,000 BTC (never to be exceeded)
-                - ⛏️ Approximately 19.8M+ Bitcoin already mined (~94%+)
-                - ⏳ Less than 1.2M Bitcoin left to mine
-                - 📅 Final Bitcoin estimated to be mined around 2140
-                - ⚡ Halving events occur every ~4 years, reducing mining rewards
-                - 💎 Each halving makes Bitcoin more scarce and harder to obtain
-                """)
-
     elif page == "Bitcoin OHLC":
         st.header("Bitcoin Weekly OHLC Data")
-        
-        # Use session state for data persistence and proper scoping
-        if 'btc_ohlc_data' not in st.session_state:
-            st.session_state.btc_ohlc_data = pd.DataFrame()
-        
-        if 'crypto_prices' not in st.session_state:
-            st.session_state.crypto_prices = {'BTC': None, 'ETH': None, 'BNB': None, 'POL': None}
-        
-        # Load data if not already loaded
-        if st.session_state.btc_ohlc_data.empty:
-            with st.spinner("Loading Bitcoin OHLC data..."):
-                try:
-                    st.session_state.btc_ohlc_data = cached_get_btc_ohlc_data()
-                except Exception as e:
-                    st.error(f"❌ Failed to load Bitcoin OHLC data: {str(e)}")
-                    st.session_state.btc_ohlc_data = pd.DataFrame()
-        
-        # Get current price from global scope or session state
-        current_btc_price = None
-        try:
-            # Try to get from global binance_prices if available
-            if 'binance_prices' in locals() and binance_prices:
-                current_btc_price = binance_prices.get('BTC')
-            elif 'binance_prices' in globals() and binance_prices:
-                current_btc_price = binance_prices.get('BTC')
-            else:
-                # Fallback to session state or fetch fresh
-                current_btc_price = st.session_state.crypto_prices.get('BTC')
-                if not current_btc_price:
-                    try:
-                        price_result = cached_get_crypto_prices()
-                        current_btc_price = price_result['prices'].get('BTC')
-                        st.session_state.crypto_prices = price_result['prices']
-                    except:
-                        current_btc_price = None
-        except:
-            current_btc_price = None
         
         # Compact header row with API transparency
         col_price, col_fetch = st.columns([2, 1])
         with col_price:
+            current_btc_price = binance_prices.get('BTC')
             if current_btc_price and current_btc_price > 0:
                 st.metric("Current Price", f"${current_btc_price:,.2f}")
             else:
@@ -1771,17 +533,12 @@ def main():
         with col_fetch:
             if st.button("Fetch Latest Data"):
                 with st.spinner("Fetching comprehensive Bitcoin data from 2013..."):
-                    # Clear cached data and refetch
+                    # Clear only OHLC cached data
                     cached_get_btc_ohlc_data.clear()
-                    try:
-                        st.session_state.btc_ohlc_data = cached_get_btc_ohlc_data()
-                        st.success("Bitcoin OHLC data updated!")
-                    except Exception as e:
-                        st.error(f"Failed to fetch data: {str(e)}")
-                        st.session_state.btc_ohlc_data = pd.DataFrame()
+                    fetch_and_update_data()
+                st.success("Bitcoin OHLC data updated!")
                 st.rerun()
 
-        btc_data = st.session_state.btc_ohlc_data
         if not btc_data.empty:
             current_year = pd.to_datetime('today').year
             
@@ -1803,60 +560,42 @@ def main():
             year_data = btc_data[btc_data.index.year == st.session_state.selected_year]
 
             if not year_data.empty:
-                try:
-                    # Ensure all required columns exist
-                    required_columns = ['open', 'high', 'low', 'close']
-                    missing_columns = [col for col in required_columns if col not in year_data.columns]
-                    
-                    if missing_columns:
-                        st.error(f"❌ Missing required columns: {missing_columns}")
-                        st.info("Available columns: " + ", ".join(year_data.columns.tolist()))
-                    else:
-                        # Import plotly for chart creation
-                        import plotly.graph_objects as go
-                        
-                        fig = go.Figure(data=[go.Candlestick(x=year_data.index,
-                            open=year_data['open'],
-                            high=year_data['high'],
-                            low=year_data['low'],
-                            close=year_data['close'])])
-                        
-                        # Generate tick values and labels for all 12 months
-                        selected_year = st.session_state.selected_year
-                        month_starts = pd.date_range(start=f'{selected_year}-01-01', end=f'{selected_year}-12-31', freq='MS')
-                        month_labels = [d.strftime('%b') for d in month_starts]
+                fig = go.Figure(data=[go.Candlestick(x=year_data.index,
+                    open=year_data['open'],
+                    high=year_data['high'],
+                    low=year_data['low'],
+                    close=year_data['close'])])
+                
+                # Generate tick values and labels for all 12 months
+                selected_year = st.session_state.selected_year
+                month_starts = pd.date_range(start=f'{selected_year}-01-01', end=f'{selected_year}-12-31', freq='MS')
+                month_labels = [d.strftime('%b') for d in month_starts]
 
-                        fig.update_layout(
-                            title=f'Bitcoin Weekly OHLC for {st.session_state.selected_year}',
-                            xaxis_title='Month',
-                            yaxis_title='Price (USD)',
-                            height=400,  # Reduced height
-                            xaxis_rangeslider_visible=False,
-                            bargap=0,
-                            bargroupgap=0,
-                            margin=dict(l=0, r=0, t=40, b=0),
-                            xaxis=dict(
-                                showgrid=False,
-                                tickmode='array',
-                                tickvals=month_starts,
-                                ticktext=month_labels,
-                                dtick='M1'
-                            )
-                        )
+                fig.update_layout(
+                    title=f'Bitcoin Weekly OHLC for {st.session_state.selected_year}',
+                    xaxis_title='Month',
+                    yaxis_title='Price (USD)',
+                    height=400,  # Reduced height
+                    xaxis_rangeslider_visible=False,
+                    bargap=0,
+                    bargroupgap=0,
+                    margin=dict(l=0, r=0, t=40, b=0),
+                    xaxis=dict(
+                        showgrid=False,
+                        tickmode='array',
+                        tickvals=month_starts,
+                        ticktext=month_labels,
+                        dtick='M1'
+                    )
+                )
 
-                        fig.update_xaxes(
-                            tickvals=month_starts,
-                            ticktext=month_labels,
-                            showgrid=False
-                        )
+                fig.update_xaxes(
+                    tickvals=month_starts,
+                    ticktext=month_labels,
+                    showgrid=False
+                )
 
-                        st.plotly_chart(fig, use_container_width=True)
-                except Exception as e:
-                    st.error(f"❌ Error creating chart: {str(e)}")
-                    st.info(f"Year data shape: {year_data.shape}")
-                    st.info(f"Year data columns: {year_data.columns.tolist()}")
-                    if not year_data.empty:
-                        st.dataframe(year_data.head())
+                st.plotly_chart(fig, use_container_width=True)
             else:
                 st.write(f"No data available for {st.session_state.selected_year}")
         else:
@@ -1917,9 +656,6 @@ def main():
             if 'error' not in mempool_data and 'mempool_blocks' in mempool_data:
                 st.subheader("📦 Next Blocks in Mempool")
                 blocks_data = mempool_data['mempool_blocks'][:6]
-                
-                # Import plotly for chart creation
-                import plotly.graph_objects as go
                 
                 fig_blocks = go.Figure()
                 
@@ -1988,9 +724,6 @@ def main():
             if 'error' not in mempool_data and 'mining_pools' in mempool_data:
                 st.subheader("🏊‍♂️ Mining Pool Distribution")
                 pools = mempool_data['mining_pools']['pools'][:6]
-                
-                # Import plotly for chart creation
-                import plotly.graph_objects as go
                 
                 # Enhanced colors for mining pools
                 pool_colors = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c']
@@ -2464,9 +1197,6 @@ def main():
     elif page == "Bitcoin Metrics":
         st.header("📊 Bitcoin Metrics Dashboard")
         
-        # Import plotly at the beginning to ensure it's available throughout the section
-        import plotly.graph_objects as go
-        
         # Add cache for metrics with 5-minute TTL
         @st.cache_data(ttl=300)
         def cached_get_bitcoin_metrics():
@@ -2599,9 +1329,6 @@ def main():
                         fng_value = fng_data['value']
                         fng_class = fng_data.get('classification', 'Unknown')
                         
-                        # Import plotly for chart creation
-                        import plotly.graph_objects as go
-                        
                         # Create gauge meter
                         fig_gauge = go.Figure(go.Indicator(
                             mode="gauge+number+delta",
@@ -2702,9 +1429,6 @@ def main():
                                     dates = [datetime.fromtimestamp(point['x']) for point in tx_data['values']]
                                     values = [point['y'] for point in tx_data['values']]
                                     
-                                    # Import plotly for chart creation
-                                    import plotly.graph_objects as go
-                                    
                                     fig = go.Figure()
                                     fig.add_trace(go.Scatter(
                                         x=dates, 
@@ -2738,9 +1462,6 @@ def main():
                                     # Use transaction data as a proxy for network activity
                                     dates = [datetime.fromtimestamp(point['x']) for point in tx_data['values']]
                                     values = [point['y'] for point in tx_data['values']]
-                                    
-                                    # Import plotly for chart creation
-                                    import plotly.graph_objects as go
                                     
                                     # Calculate transactions per address as an activity metric
                                     # This gives us a different perspective on network usage
@@ -2823,7 +1544,6 @@ def main():
                                         'latest_raw_magnitude': f"{latest_raw:.2e}" if latest_raw > 0 else "0"
                                     })
                                     
-                                    import plotly.graph_objects as go
                                     fig = go.Figure()
                                     fig.add_trace(go.Scatter(
                                         x=dates, 
@@ -2857,7 +1577,6 @@ def main():
                                     dates = [datetime.fromtimestamp(point['x']) for point in revenue_data['values']]
                                     values = [point['y'] / 1e6 for point in revenue_data['values']]  # Convert to millions
                                     
-                                    import plotly.graph_objects as go
                                     fig = go.Figure()
                                     fig.add_trace(go.Scatter(
                                         x=dates, 
@@ -2895,7 +1614,6 @@ def main():
                                     dates = [datetime.fromtimestamp(point['x']) for point in fees_data['values']]
                                     values = [point['y'] for point in fees_data['values']]
                                     
-                                    import plotly.graph_objects as go
                                     fig = go.Figure()
                                     fig.add_trace(go.Scatter(
                                         x=dates, 
@@ -2929,7 +1647,6 @@ def main():
                                     dates = [datetime.fromtimestamp(point['x']) for point in mempool_data['values']]
                                     values = [point['y'] / 1e6 for point in mempool_data['values']]  # Convert to MB
                                     
-                                    import plotly.graph_objects as go
                                     fig = go.Figure()
                                     fig.add_trace(go.Scatter(
                                         x=dates, 
@@ -3134,7 +1851,6 @@ def main():
             logs = st.session_state.debug_logs
             
             # Calculate session metrics
-            from datetime import datetime  # Local import to ensure availability
             total_logs = len(logs)
             session_start = logs[0]['timestamp_full'] if logs else 'Unknown'
             current_time = datetime.now().isoformat()
