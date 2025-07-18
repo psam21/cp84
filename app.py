@@ -1322,29 +1322,53 @@ def main():
                 
                 fear_col1, fear_col2, fear_col3 = st.columns(3)
                 
-                # Fear & Greed Index
+                # Fear & Greed Index with Gauge Meter
                 with fear_col1:
                     fng_data = metrics.get('fear_greed', {})
                     if fng_data.get('value') is not None:
                         fng_value = fng_data['value']
                         fng_class = fng_data.get('classification', 'Unknown')
                         
-                        # Color based on fear/greed
-                        if fng_value < 25:
-                            color = "🔴"
-                        elif fng_value < 45:
-                            color = "🟠"
-                        elif fng_value < 55:
-                            color = "🟡"
-                        elif fng_value < 75:
-                            color = "🟢"
-                        else:
-                            color = "🚀"
+                        # Create gauge meter
+                        fig_gauge = go.Figure(go.Indicator(
+                            mode="gauge+number+delta",
+                            value=fng_value,
+                            domain={'x': [0, 1], 'y': [0, 1]},
+                            title={'text': "🎯 Fear & Greed Index", 'font': {'size': 16}},
+                            delta={'reference': 50, 'increasing': {'color': "green"}, 'decreasing': {'color': "red"}},
+                            gauge={
+                                'axis': {'range': [None, 100], 'tickwidth': 1, 'tickcolor': "darkblue"},
+                                'bar': {'color': "darkblue"},
+                                'bgcolor': "white",
+                                'borderwidth': 2,
+                                'bordercolor': "gray",
+                                'steps': [
+                                    {'range': [0, 25], 'color': '#ff4444'},      # Extreme Fear - Red
+                                    {'range': [25, 45], 'color': '#ff8800'},     # Fear - Orange  
+                                    {'range': [45, 55], 'color': '#ffdd00'},     # Neutral - Yellow
+                                    {'range': [55, 75], 'color': '#88dd00'},     # Greed - Light Green
+                                    {'range': [75, 100], 'color': '#00dd44'}     # Extreme Greed - Green
+                                ],
+                                'threshold': {
+                                    'line': {'color': "red", 'width': 4},
+                                    'thickness': 0.75,
+                                    'value': 90
+                                }
+                            }
+                        ))
                         
-                        st.metric(f"{color} Fear & Greed Index", f"{fng_value}/100", delta=fng_class)
+                        fig_gauge.update_layout(
+                            height=250,
+                            margin=dict(l=10, r=10, t=30, b=10),
+                            paper_bgcolor="rgba(0,0,0,0)",
+                            plot_bgcolor="rgba(0,0,0,0)",
+                            font={'color': "darkblue", 'family': "Arial"}
+                        )
                         
-                        # Add a progress bar
-                        st.progress(fng_value / 100)
+                        st.plotly_chart(fig_gauge, use_container_width=True)
+                        
+                        # Show classification below gauge
+                        st.markdown(f"**Classification:** {fng_class}", unsafe_allow_html=True)
                     else:
                         st.metric("😰 Fear & Greed Index", "API Failed")
                 
