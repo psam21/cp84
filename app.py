@@ -1702,18 +1702,46 @@ def main():
     elif page == "Bitcoin OHLC":
         st.header("Bitcoin Weekly OHLC Data")
         
-        # Ensure btc_data is initialized
+        # Use session state for data persistence and proper scoping
+        if 'btc_ohlc_data' not in st.session_state:
+            st.session_state.btc_ohlc_data = pd.DataFrame()
+        
+        if 'crypto_prices' not in st.session_state:
+            st.session_state.crypto_prices = {'BTC': None, 'ETH': None, 'BNB': None, 'POL': None}
+        
+        # Load data if not already loaded
+        if st.session_state.btc_ohlc_data.empty:
+            with st.spinner("Loading Bitcoin OHLC data..."):
+                try:
+                    st.session_state.btc_ohlc_data = cached_get_btc_ohlc_data()
+                except Exception as e:
+                    st.error(f"❌ Failed to load Bitcoin OHLC data: {str(e)}")
+                    st.session_state.btc_ohlc_data = pd.DataFrame()
+        
+        # Get current price from global scope or session state
+        current_btc_price = None
         try:
-            if 'btc_data' not in locals() or btc_data is None:
-                btc_data = cached_get_btc_ohlc_data()
-        except Exception as e:
-            st.error(f"❌ Failed to load Bitcoin OHLC data: {str(e)}")
-            btc_data = pd.DataFrame()
+            # Try to get from global binance_prices if available
+            if 'binance_prices' in locals() and binance_prices:
+                current_btc_price = binance_prices.get('BTC')
+            elif 'binance_prices' in globals() and binance_prices:
+                current_btc_price = binance_prices.get('BTC')
+            else:
+                # Fallback to session state or fetch fresh
+                current_btc_price = st.session_state.crypto_prices.get('BTC')
+                if not current_btc_price:
+                    try:
+                        price_result = cached_get_crypto_prices()
+                        current_btc_price = price_result['prices'].get('BTC')
+                        st.session_state.crypto_prices = price_result['prices']
+                    except:
+                        current_btc_price = None
+        except:
+            current_btc_price = None
         
         # Compact header row with API transparency
         col_price, col_fetch = st.columns([2, 1])
         with col_price:
-            current_btc_price = binance_prices.get('BTC')
             if current_btc_price and current_btc_price > 0:
                 st.metric("Current Price", f"${current_btc_price:,.2f}")
             else:
@@ -1721,16 +1749,17 @@ def main():
         with col_fetch:
             if st.button("Fetch Latest Data"):
                 with st.spinner("Fetching comprehensive Bitcoin data from 2013..."):
-                    # Clear only OHLC cached data
+                    # Clear cached data and refetch
                     cached_get_btc_ohlc_data.clear()
                     try:
-                        btc_data = cached_get_btc_ohlc_data()
+                        st.session_state.btc_ohlc_data = cached_get_btc_ohlc_data()
                         st.success("Bitcoin OHLC data updated!")
                     except Exception as e:
                         st.error(f"Failed to fetch data: {str(e)}")
-                        btc_data = pd.DataFrame()
+                        st.session_state.btc_ohlc_data = pd.DataFrame()
                 st.rerun()
 
+        btc_data = st.session_state.btc_ohlc_data
         if not btc_data.empty:
             current_year = pd.to_datetime('today').year
             
