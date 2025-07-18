@@ -1236,6 +1236,7 @@ def main():
                             st.error(error)
                 
                 # === SECTION 1: PRICE & MARKET DATA ===
+                st.markdown("<br>", unsafe_allow_html=True)
                 st.subheader("💰 Price & Market Data")
                 
                 price_col1, price_col2, price_col3, price_col4 = st.columns(4)
@@ -1287,7 +1288,7 @@ def main():
                     else:
                         st.metric("👑 BTC Dominance", "API Failed")
                 
-                # Multi-currency prices
+                # Multi-currency prices with minimal spacing
                 st.subheader("🌍 Global Prices")
                 curr_col1, curr_col2, curr_col3, curr_col4 = st.columns(4)
                 
@@ -1316,6 +1317,7 @@ def main():
                         st.metric("🇮🇳 INR", "N/A")
                 
                 # === SECTION 2: FEAR & GREED + SUPPLY METRICS ===
+                st.markdown("<br>", unsafe_allow_html=True)
                 st.subheader("📈 Market Sentiment & Supply")
                 
                 fear_col1, fear_col2, fear_col3 = st.columns(3)
@@ -1376,6 +1378,7 @@ def main():
                         st.metric("⛏️ Mining Difficulty", "API Failed")
                 
                 # === SECTION 3: NETWORK ACTIVITY CHARTS ===
+                st.markdown("<br>", unsafe_allow_html=True)
                 st.subheader("🌐 Network Activity")
                 
                 # Check if we have chart data
@@ -1644,6 +1647,7 @@ def main():
                     st.warning("⚠️ Chart data unavailable - API issues detected")
                 
                 # === SECTION 4: NETWORK HEALTH ===
+                st.markdown("<br>", unsafe_allow_html=True)
                 st.subheader("🌐 Network Health")
                 
                 network_col1, network_col2, network_col3 = st.columns(3)
@@ -1795,7 +1799,8 @@ def main():
                     else:
                         st.metric("🎁 Block Reward", "API Failed")
                 
-                # Show data freshness
+                # Show data freshness with minimal spacing
+                st.markdown("<br>", unsafe_allow_html=True)
                 st.divider()
                 col_time, col_sources = st.columns(2)
                 with col_time:
