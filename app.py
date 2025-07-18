@@ -1702,6 +1702,14 @@ def main():
     elif page == "Bitcoin OHLC":
         st.header("Bitcoin Weekly OHLC Data")
         
+        # Ensure btc_data is initialized
+        try:
+            if 'btc_data' not in locals() or btc_data is None:
+                btc_data = cached_get_btc_ohlc_data()
+        except Exception as e:
+            st.error(f"❌ Failed to load Bitcoin OHLC data: {str(e)}")
+            btc_data = pd.DataFrame()
+        
         # Compact header row with API transparency
         col_price, col_fetch = st.columns([2, 1])
         with col_price:
@@ -1715,8 +1723,12 @@ def main():
                 with st.spinner("Fetching comprehensive Bitcoin data from 2013..."):
                     # Clear only OHLC cached data
                     cached_get_btc_ohlc_data.clear()
-                    fetch_and_update_data()
-                st.success("Bitcoin OHLC data updated!")
+                    try:
+                        btc_data = cached_get_btc_ohlc_data()
+                        st.success("Bitcoin OHLC data updated!")
+                    except Exception as e:
+                        st.error(f"Failed to fetch data: {str(e)}")
+                        btc_data = pd.DataFrame()
                 st.rerun()
 
         if not btc_data.empty:
@@ -1740,42 +1752,57 @@ def main():
             year_data = btc_data[btc_data.index.year == st.session_state.selected_year]
 
             if not year_data.empty:
-                fig = go.Figure(data=[go.Candlestick(x=year_data.index,
-                    open=year_data['open'],
-                    high=year_data['high'],
-                    low=year_data['low'],
-                    close=year_data['close'])])
-                
-                # Generate tick values and labels for all 12 months
-                selected_year = st.session_state.selected_year
-                month_starts = pd.date_range(start=f'{selected_year}-01-01', end=f'{selected_year}-12-31', freq='MS')
-                month_labels = [d.strftime('%b') for d in month_starts]
+                try:
+                    # Ensure all required columns exist
+                    required_columns = ['open', 'high', 'low', 'close']
+                    missing_columns = [col for col in required_columns if col not in year_data.columns]
+                    
+                    if missing_columns:
+                        st.error(f"❌ Missing required columns: {missing_columns}")
+                        st.info("Available columns: " + ", ".join(year_data.columns.tolist()))
+                    else:
+                        fig = go.Figure(data=[go.Candlestick(x=year_data.index,
+                            open=year_data['open'],
+                            high=year_data['high'],
+                            low=year_data['low'],
+                            close=year_data['close'])])
+                        
+                        # Generate tick values and labels for all 12 months
+                        selected_year = st.session_state.selected_year
+                        month_starts = pd.date_range(start=f'{selected_year}-01-01', end=f'{selected_year}-12-31', freq='MS')
+                        month_labels = [d.strftime('%b') for d in month_starts]
 
-                fig.update_layout(
-                    title=f'Bitcoin Weekly OHLC for {st.session_state.selected_year}',
-                    xaxis_title='Month',
-                    yaxis_title='Price (USD)',
-                    height=400,  # Reduced height
-                    xaxis_rangeslider_visible=False,
-                    bargap=0,
-                    bargroupgap=0,
-                    margin=dict(l=0, r=0, t=40, b=0),
-                    xaxis=dict(
-                        showgrid=False,
-                        tickmode='array',
-                        tickvals=month_starts,
-                        ticktext=month_labels,
-                        dtick='M1'
-                    )
-                )
+                        fig.update_layout(
+                            title=f'Bitcoin Weekly OHLC for {st.session_state.selected_year}',
+                            xaxis_title='Month',
+                            yaxis_title='Price (USD)',
+                            height=400,  # Reduced height
+                            xaxis_rangeslider_visible=False,
+                            bargap=0,
+                            bargroupgap=0,
+                            margin=dict(l=0, r=0, t=40, b=0),
+                            xaxis=dict(
+                                showgrid=False,
+                                tickmode='array',
+                                tickvals=month_starts,
+                                ticktext=month_labels,
+                                dtick='M1'
+                            )
+                        )
 
-                fig.update_xaxes(
-                    tickvals=month_starts,
-                    ticktext=month_labels,
-                    showgrid=False
-                )
+                        fig.update_xaxes(
+                            tickvals=month_starts,
+                            ticktext=month_labels,
+                            showgrid=False
+                        )
 
-                st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, use_container_width=True)
+                except Exception as e:
+                    st.error(f"❌ Error creating chart: {str(e)}")
+                    st.info(f"Year data shape: {year_data.shape}")
+                    st.info(f"Year data columns: {year_data.columns.tolist()}")
+                    if not year_data.empty:
+                        st.dataframe(year_data.head())
             else:
                 st.write(f"No data available for {st.session_state.selected_year}")
         else:
