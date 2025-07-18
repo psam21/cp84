@@ -1343,11 +1343,11 @@ def main():
                                 'borderwidth': 2,
                                 'bordercolor': "gray",
                                 'steps': [
-                                    {'range': [0, 25], 'color': '#ff4444'},      # Extreme Fear - Red
-                                    {'range': [25, 45], 'color': '#ff8800'},     # Fear - Orange  
-                                    {'range': [45, 55], 'color': '#ffdd00'},     # Neutral - Yellow
-                                    {'range': [55, 75], 'color': '#88dd00'},     # Greed - Light Green
-                                    {'range': [75, 100], 'color': '#00dd44'}     # Extreme Greed - Green
+                                    {'range': [0, 20], 'color': '#ff4444'},      # Extreme Fear - Red
+                                    {'range': [20, 40], 'color': '#ff8800'},     # Fear - Orange  
+                                    {'range': [40, 60], 'color': '#ffdd00'},     # Neutral - Yellow
+                                    {'range': [60, 80], 'color': '#88dd00'},     # Greed - Light Green
+                                    {'range': [80, 100], 'color': '#00dd44'}     # Extreme Greed - Green
                                 ],
                                 'threshold': {
                                     'line': {'color': "red", 'width': 4},
@@ -1358,7 +1358,7 @@ def main():
                         ))
                         
                         fig_gauge.update_layout(
-                            height=250,
+                            height=200,
                             margin=dict(l=10, r=10, t=30, b=10),
                             paper_bgcolor="rgba(0,0,0,0)",
                             plot_bgcolor="rgba(0,0,0,0)",
@@ -1379,9 +1379,11 @@ def main():
                         total_supply = blockchain_data['total_supply'] / 1e8  # Convert from satoshis
                         remaining = 21_000_000 - total_supply
                         st.metric("🪙 Circulating Supply", f"{total_supply:,.0f} BTC")
+                        st.markdown("<br>", unsafe_allow_html=True)
                         st.metric("⏳ Remaining to Mine", f"{remaining:,.0f} BTC")
                         
                         # Progress bar to 21M
+                        st.markdown("<br>", unsafe_allow_html=True)
                         progress = total_supply / 21_000_000
                         st.progress(progress, text=f"{progress:.1%} of 21M mined")
                     else:
@@ -1393,6 +1395,8 @@ def main():
                         st.metric("🧱 Block Count", f"{blockchain_data['block_count']:,}")
                     else:
                         st.metric("🧱 Block Count", "API Failed")
+                    
+                    st.markdown("<br>", unsafe_allow_html=True)
                     
                     if blockchain_data.get('mining_difficulty'):
                         difficulty = blockchain_data['mining_difficulty']
