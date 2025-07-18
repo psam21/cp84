@@ -5,7 +5,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from bitfinex_data import get_btc_ohlc_data, fetch_and_update_data
 from mempool_data import get_mempool_info, get_mempool_stats
 from binance_data import get_binance_price
@@ -576,7 +576,9 @@ def main():
         # Load comprehensive Bitcoin data
         with st.spinner("🔄 Loading Bitcoin's future metrics..."):
             try:
+                debug_log("🚀 Starting Bitcoin Future metrics fetch...", "INFO", "bitcoin_future_metrics_start")
                 metrics = cached_get_future_metrics()
+                debug_log(f"✅ Bitcoin Future metrics loaded successfully with {len(metrics.get('errors', []))} errors", "SUCCESS", "bitcoin_future_metrics_success")
                 
                 with col_status:
                     if len(metrics.get('errors', [])) == 0:
@@ -827,43 +829,58 @@ def main():
                 
                 with halving_col2:
                     # Next halving calculation
-                    current_blocks = blockchain_data.get('block_count', 0)
-                    if current_blocks > 0:
-                        # Calculate next halving details
-                        blocks_per_halving = 210_000
-                        current_epoch = current_blocks // blocks_per_halving
-                        next_halving_block = (current_epoch + 1) * blocks_per_halving
-                        blocks_to_halving = next_halving_block - current_blocks
+                    try:
+                        debug_log("🔄 Starting halving countdown calculation...", "INFO", "halving_calculation_start")
+                        current_blocks = blockchain_data.get('block_count', 0)
+                        debug_log(f"📊 Current block count: {current_blocks}", "DATA", "current_blocks_data")
                         
-                        # Estimate time to next halving (10 min average block time)
-                        days_to_halving = (blocks_to_halving * 10) / (60 * 24)
-                        
-                        # Current reward calculation
-                        current_reward = 50 / (2 ** current_epoch)
-                        next_reward = current_reward / 2
-                        
-                        st.markdown("### 📅 Next Halving Countdown")
-                        
-                        # Halving countdown metrics
-                        countdown_col1, countdown_col2 = st.columns(2)
-                        with countdown_col1:
-                            st.metric("⏰ Days Until Halving", f"{days_to_halving:,.0f}")
-                            st.metric("🧱 Blocks Remaining", f"{blocks_to_halving:,}")
-                        with countdown_col2:
-                            st.metric("🎁 Current Reward", f"{current_reward} BTC")
-                            st.metric("⬇️ Next Reward", f"{next_reward} BTC")
-                        
-                        # Progress to next halving
-                        blocks_mined_this_cycle = current_blocks - (current_epoch * blocks_per_halving)
-                        cycle_progress = (blocks_mined_this_cycle / blocks_per_halving) * 100
-                        
-                        st.markdown("#### 📊 Current Halving Cycle Progress")
-                        st.progress(cycle_progress/100, text=f"{cycle_progress:.1f}% to next halving")
-                        
-                        st.caption(f"**Halving Epoch:** {current_epoch + 1}")
-                        st.caption(f"**Next Halving Block:** {next_halving_block:,}")
-                    else:
-                        st.error("❌ Unable to calculate halving data - API failed")
+                        if current_blocks > 0:
+                            # Calculate next halving details
+                            blocks_per_halving = 210_000
+                            current_epoch = current_blocks // blocks_per_halving
+                            next_halving_block = (current_epoch + 1) * blocks_per_halving
+                            blocks_to_halving = next_halving_block - current_blocks
+                            
+                            # Estimate time to next halving (10 min average block time)
+                            days_to_halving = (blocks_to_halving * 10) / (60 * 24)
+                            debug_log(f"⏰ Calculated days to halving: {days_to_halving}", "DATA", "days_to_halving_calculation")
+                            
+                            # Current reward calculation
+                            current_reward = 50 / (2 ** current_epoch)
+                            next_reward = current_reward / 2
+                            
+                            debug_log("✅ Halving calculation completed successfully", "SUCCESS", "halving_calculation_success")
+                            
+                            st.markdown("### 📅 Next Halving Countdown")
+                            
+                            # Halving countdown metrics
+                            countdown_col1, countdown_col2 = st.columns(2)
+                            with countdown_col1:
+                                st.metric("⏰ Days Until Halving", f"{days_to_halving:,.0f}")
+                                st.metric("🧱 Blocks Remaining", f"{blocks_to_halving:,}")
+                            with countdown_col2:
+                                st.metric("🎁 Current Reward", f"{current_reward} BTC")
+                                st.metric("⬇️ Next Reward", f"{next_reward} BTC")
+                            
+                            # Progress to next halving
+                            blocks_mined_this_cycle = current_blocks - (current_epoch * blocks_per_halving)
+                            cycle_progress = (blocks_mined_this_cycle / blocks_per_halving) * 100
+                            
+                            st.markdown("#### 📊 Current Halving Cycle Progress")
+                            st.progress(cycle_progress/100, text=f"{cycle_progress:.1f}% to next halving")
+                            
+                            st.caption(f"**Halving Epoch:** {current_epoch + 1}")
+                            st.caption(f"**Next Halving Block:** {next_halving_block:,}")
+                        else:
+                            debug_log("❌ Unable to calculate halving data - block count is 0", "ERROR", "halving_calculation_no_blocks")
+                            st.error("❌ Unable to calculate halving data - API failed")
+                    except Exception as e:
+                        error_msg = f"Failed to calculate halving data: {str(e)}"
+                        debug_log(f"💥 Halving calculation error: {error_msg}", "ERROR", "halving_calculation_exception", {"error": str(e)})
+                        st.error(f"❌ {error_msg}")
+                        # Show fallback content
+                        st.info("📅 Next halving estimated for 2028 (approximate)")
+                        st.info("🎁 Current block reward: 3.125 BTC")
                 
                 # === SECTION 3: BITCOIN SUPPLY PROJECTION TO 2140 ===
                 st.markdown("<br><br>", unsafe_allow_html=True)
