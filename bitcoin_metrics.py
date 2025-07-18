@@ -144,10 +144,18 @@ class BitcoinMetrics:
         except requests.exceptions.HTTPError as e:
             response_time = round((time.time() - start_time) * 1000, 2)
             error_msg = f"HTTP {response.status_code}: {str(e)}"
-            self.debug_log(f"🚨 {api_name} HTTP error: {error_msg}", "ERROR")
-            self.record_failure(api_name)  # Record failure for circuit breaker
-            if self.debug_log_api:
-                self.debug_log_api(api_name, url, "HTTP_ERROR", response_time, None, error_msg)
+            
+            # Handle rate limiting (429) more gracefully
+            if response.status_code == 429:
+                self.debug_log(f"⚠️ {api_name} rate limited (HTTP 429): Will retry later", "WARNING")
+                # Don't record as failure for circuit breaker - it's temporary
+                if self.debug_log_api:
+                    self.debug_log_api(api_name, url, "RATE_LIMITED", response_time, None, error_msg)
+            else:
+                self.debug_log(f"🚨 {api_name} HTTP error: {error_msg}", "ERROR")
+                self.record_failure(api_name)  # Record failure for circuit breaker
+                if self.debug_log_api:
+                    self.debug_log_api(api_name, url, "HTTP_ERROR", response_time, None, error_msg)
             return None
             
         except requests.exceptions.ConnectionError as e:
@@ -561,21 +569,29 @@ class BitcoinMetrics:
             metrics['errors'].append(error_msg)
             self.debug_log(f"💥 CoinDesk exception: {error_msg}", "ERROR", "coindesk_exception")
         
-        # CoinGecko comprehensive data
+        # CoinGecko comprehensive data (with rate limiting)
         try:
             self.debug_log("🦎 Starting CoinGecko comprehensive fetch...", "INFO", "coingecko_fetch")
+            # Add delay to prevent rate limiting
+            import time
+            time.sleep(1.0)  # 1 second delay to respect rate limits
+            
             coingecko_data = self.get_coingecko_data()
             if coingecko_data:
                 metrics['coingecko'] = coingecko_data
                 self.debug_log("✅ CoinGecko comprehensive data acquired", "SUCCESS", "coingecko_success")
             else:
                 error_msg = "CoinGecko API failed"
-                metrics['errors'].append(error_msg)
-                self.debug_log(f"❌ {error_msg}", "ERROR", "coingecko_failure")
+                # Don't treat rate limiting as critical error - just log it
+                self.debug_log(f"⚠️ {error_msg} (possibly rate limited)", "WARNING", "coingecko_failure")
         except Exception as e:
             error_msg = f"CoinGecko error: {str(e)}"
-            metrics['errors'].append(error_msg)
-            self.debug_log(f"🦎 CoinGecko exception: {error_msg}", "ERROR", "coingecko_exception")
+            # Check if it's a rate limiting error
+            if "429" in str(e) or "Too Many Requests" in str(e):
+                self.debug_log(f"⚠️ CoinGecko rate limited: {error_msg}", "WARNING", "coingecko_rate_limited")
+            else:
+                metrics['errors'].append(error_msg)
+                self.debug_log(f"🦎 CoinGecko exception: {error_msg}", "ERROR", "coingecko_exception")
         
         # Fear & Greed Index
         try:
@@ -609,17 +625,29 @@ class BitcoinMetrics:
             metrics['errors'].append(error_msg)
             self.debug_log(f"🔗 Blockchain.info exception: {error_msg}", "ERROR", "blockchain_exception")
         
-        # Global crypto data
+        # Global crypto data (with rate limiting protection)
         try:
             self.debug_log("🌍 Starting global crypto data fetch...", "INFO", "global_crypto_fetch")
+            # Add delay to prevent rate limiting
+            import time
+            time.sleep(1.0)  # 1 second delay to respect rate limits
+            
             global_data = self.get_global_crypto_data()
             if global_data:
                 metrics['global'] = global_data
                 self.debug_log("✅ Global crypto data acquired", "SUCCESS", "global_crypto_success")
             else:
                 error_msg = "Global crypto data failed"
+                # Don't treat rate limiting as critical error - just log it
+                self.debug_log(f"⚠️ {error_msg} (possibly rate limited)", "WARNING", "global_crypto_failure")
+        except Exception as e:
+            error_msg = f"Global crypto error: {str(e)}"
+            # Check if it's a rate limiting error
+            if "429" in str(e) or "Too Many Requests" in str(e):
+                self.debug_log(f"⚠️ Global crypto rate limited: {error_msg}", "WARNING", "global_crypto_rate_limited")
+            else:
                 metrics['errors'].append(error_msg)
-                self.debug_log(f"❌ {error_msg}", "ERROR", "global_crypto_failure")
+                self.debug_log(f"🌍 Global crypto exception: {error_msg}", "ERROR", "global_crypto_exception")
         except Exception as e:
             error_msg = f"Global crypto error: {str(e)}"
             metrics['errors'].append(error_msg)
@@ -661,18 +689,27 @@ class BitcoinMetrics:
         for chart_type in chart_types:
             try:
                 self.debug_log(f"📈 Fetching {chart_type} chart...", "INFO", f"chart_{chart_type.replace('-', '_')}")
+                
+                # Add delay between chart requests to prevent rate limiting
+                import time
+                time.sleep(0.3)  # 300ms delay between requests
+                
                 chart_data = self.get_blockchain_chart(chart_type)
                 if chart_data:
                     metrics['charts'][chart_type] = chart_data
                     self.debug_log(f"✅ {chart_type} chart acquired", "SUCCESS", f"chart_{chart_type.replace('-', '_')}_success")
                 else:
                     error_msg = f"{chart_type} chart failed"
-                    metrics['errors'].append(error_msg)
-                    self.debug_log(f"❌ {error_msg}", "ERROR", f"chart_{chart_type.replace('-', '_')}_failure")
+                    # Be more lenient with chart failures - don't count them as critical errors
+                    self.debug_log(f"⚠️ {error_msg} (may be temporary)", "WARNING", f"chart_{chart_type.replace('-', '_')}_failure")
             except Exception as e:
                 error_msg = f"{chart_type} chart error: {str(e)}"
-                metrics['errors'].append(error_msg)
-                self.debug_log(f"💥 {chart_type} chart exception: {error_msg}", "ERROR", f"chart_{chart_type.replace('-', '_')}_exception")
+                # Check if it's a rate limiting error
+                if "429" in str(e) or "Too Many Requests" in str(e):
+                    self.debug_log(f"⚠️ {chart_type} chart rate limited: {error_msg}", "WARNING", f"chart_{chart_type.replace('-', '_')}_rate_limited")
+                else:
+                    metrics['errors'].append(error_msg)
+                    self.debug_log(f"💥 {chart_type} chart exception: {error_msg}", "ERROR", f"chart_{chart_type.replace('-', '_')}_exception")
         
         # Final summary
         total_metrics = len([k for k in metrics.keys() if k not in ['timestamp', 'errors']]) + len(metrics.get('charts', {}))
