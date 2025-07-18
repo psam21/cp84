@@ -1174,8 +1174,8 @@ def main():
             st.error(f"❌ Error calculating portfolio values: {e}")
             st.info("🔄 Please try refreshing prices or check API connectivity.")
         
-        # Add extra spacing before Portfolio Management section
-        st.markdown("<br><br>", unsafe_allow_html=True)
+        # Add minimal spacing before Portfolio Management section
+        st.markdown("<br>", unsafe_allow_html=True)
         
         # Enhanced portfolio management with session state
         st.subheader("💾 Portfolio Management")
