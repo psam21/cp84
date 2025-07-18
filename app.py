@@ -1833,6 +1833,12 @@ def main():
                 level_counts[level] = level_counts.get(level, 0) + 1
                 
                 context = log.get('context', 'None')
+                # Ensure context is a string to avoid TypeError
+                if context is None:
+                    context = 'None'
+                elif not isinstance(context, str):
+                    context = str(context)
+                
                 context_counts[context] = context_counts.get(context, 0) + 1
                 
                 if context and context.startswith('api_'):
@@ -1890,8 +1896,8 @@ def main():
 ## Key Metrics
 - **Errors:** {len([l for l in logs if l.get('level') == 'ERROR'])}
 - **Warnings:** {len([l for l in logs if l.get('level') == 'WARNING'])}
-- **API Calls:** {len([l for l in logs if l.get('context', '').startswith('api_')])}
-- **Data Operations:** {len([l for l in logs if l.get('context', '').startswith('processing_')])}
+- **API Calls:** {len([l for l in logs if l.get('context', '') and str(l.get('context', '')).startswith('api_')])}
+- **Data Operations:** {len([l for l in logs if l.get('context', '') and str(l.get('context', '')).startswith('processing_')])}
 - **User Actions:** {len([l for l in logs if l.get('context') == 'user_interaction'])}
 
 ## Session Timeline
@@ -1972,9 +1978,20 @@ def main():
                     index=0
                 )
             with col_filter2:
+                # Get unique contexts, ensuring they are strings
+                unique_contexts = []
+                for log in logs:
+                    context = log.get('context', 'None')
+                    if context is None:
+                        context = 'None'
+                    elif not isinstance(context, str):
+                        context = str(context)
+                    if context not in unique_contexts:
+                        unique_contexts.append(context)
+                
                 context_filter = st.selectbox(
                     "Filter by context:",
-                    ["ALL"] + list(set([log.get('context', 'None') for log in logs if log.get('context')])),
+                    ["ALL"] + sorted(unique_contexts),
                     index=0
                 )
             with col_filter3:
@@ -1985,7 +2002,16 @@ def main():
             if level_filter != "ALL":
                 filtered_logs = [log for log in filtered_logs if log.get('level', 'INFO') == level_filter]
             if context_filter != "ALL":
-                filtered_logs = [log for log in filtered_logs if log.get('context') == context_filter]
+                # Safe context comparison
+                filtered_logs = []
+                for log in (filtered_logs if level_filter != "ALL" else logs):
+                    log_context = log.get('context', 'None')
+                    if log_context is None:
+                        log_context = 'None'
+                    elif not isinstance(log_context, str):
+                        log_context = str(log_context)
+                    if log_context == context_filter:
+                        filtered_logs.append(log)
             
             with log_container:
                 st.subheader(f"📋 Debug Logs ({len(filtered_logs)} of {len(logs)} shown)")
