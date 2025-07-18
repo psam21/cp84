@@ -2574,6 +2574,9 @@ def main():
                         fng_value = fng_data['value']
                         fng_class = fng_data.get('classification', 'Unknown')
                         
+                        # Import plotly for chart creation
+                        import plotly.graph_objects as go
+                        
                         # Create gauge meter
                         fig_gauge = go.Figure(go.Indicator(
                             mode="gauge+number+delta",
@@ -2674,6 +2677,9 @@ def main():
                                     dates = [datetime.fromtimestamp(point['x']) for point in tx_data['values']]
                                     values = [point['y'] for point in tx_data['values']]
                                     
+                                    # Import plotly for chart creation
+                                    import plotly.graph_objects as go
+                                    
                                     fig = go.Figure()
                                     fig.add_trace(go.Scatter(
                                         x=dates, 
@@ -2707,6 +2713,9 @@ def main():
                                     # Use transaction data as a proxy for network activity
                                     dates = [datetime.fromtimestamp(point['x']) for point in tx_data['values']]
                                     values = [point['y'] for point in tx_data['values']]
+                                    
+                                    # Import plotly for chart creation
+                                    import plotly.graph_objects as go
                                     
                                     # Calculate transactions per address as an activity metric
                                     # This gives us a different perspective on network usage
@@ -2789,6 +2798,7 @@ def main():
                                         'latest_raw_magnitude': f"{latest_raw:.2e}" if latest_raw > 0 else "0"
                                     })
                                     
+                                    import plotly.graph_objects as go
                                     fig = go.Figure()
                                     fig.add_trace(go.Scatter(
                                         x=dates, 
@@ -2822,6 +2832,7 @@ def main():
                                     dates = [datetime.fromtimestamp(point['x']) for point in revenue_data['values']]
                                     values = [point['y'] / 1e6 for point in revenue_data['values']]  # Convert to millions
                                     
+                                    import plotly.graph_objects as go
                                     fig = go.Figure()
                                     fig.add_trace(go.Scatter(
                                         x=dates, 
@@ -2859,6 +2870,7 @@ def main():
                                     dates = [datetime.fromtimestamp(point['x']) for point in fees_data['values']]
                                     values = [point['y'] for point in fees_data['values']]
                                     
+                                    import plotly.graph_objects as go
                                     fig = go.Figure()
                                     fig.add_trace(go.Scatter(
                                         x=dates, 
@@ -2892,6 +2904,7 @@ def main():
                                     dates = [datetime.fromtimestamp(point['x']) for point in mempool_data['values']]
                                     values = [point['y'] / 1e6 for point in mempool_data['values']]  # Convert to MB
                                     
+                                    import plotly.graph_objects as go
                                     fig = go.Figure()
                                     fig.add_trace(go.Scatter(
                                         x=dates, 
