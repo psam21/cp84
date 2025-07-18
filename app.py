@@ -550,6 +550,9 @@ def main():
     elif page == "Bitcoin's Future and Destiny":
         st.header("🔮 Bitcoin's Future and Destiny")
         
+        # Import datetime for this section
+        from datetime import datetime, timedelta
+        
         # Initialize session state for Future and Destiny data
         if 'bfd_data' not in st.session_state:
             st.session_state.bfd_data = {}
@@ -1496,6 +1499,9 @@ def main():
                     
                     # Calculate scenario projections
                     if st.button("🚀 Run Scenario Simulation", type="primary"):
+                        # Import plotly for scenario visualization
+                        import plotly.graph_objects as go
+                        
                         # Extract parameters
                         price_multipliers = {"Conservative (10% annual)": 1.10, "Moderate (25% annual)": 1.25, "Aggressive (50% annual)": 1.50, "Parabolic (100% annual)": 2.00}
                         reg_multipliers = {"Hostile (-20% adoption)": 0.8, "Neutral (0% impact)": 1.0, "Favorable (+30% adoption)": 1.3, "Very Favorable (+50% adoption)": 1.5}
