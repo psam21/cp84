@@ -77,6 +77,60 @@ class RateLimiter:
 # Global rate limiter instance
 rate_limiter = RateLimiter()
 
+def simple_api_request(url, timeout=10):
+    """Simple API request without rate limiting for emergency fallback"""
+    import requests
+    
+    try:
+        headers = {
+            'User-Agent': 'StreamlitPortfolio/1.0',
+            'Accept': 'application/json',
+            'Connection': 'close'
+        }
+        
+        debug_log(f"🚨 Emergency fallback request: {url[:60]}...", "WARNING", "emergency_fallback")
+        response = requests.get(url, headers=headers, timeout=timeout)
+        
+        if response.status_code == 200:
+            debug_log(f"✅ Emergency fallback successful", "SUCCESS", "emergency_fallback")
+            return response
+        else:
+            debug_log(f"❌ Emergency fallback failed: HTTP {response.status_code}", "ERROR", "emergency_fallback")
+            return None
+            
+    except Exception as e:
+        debug_log(f"❌ Emergency fallback error: {e}", "ERROR", "emergency_fallback")
+        return None
+
+def test_api_connectivity():
+    """Test basic API connectivity for debugging"""
+    import requests
+    
+    results = {}
+    
+    # Test APIs
+    test_urls = {
+        'CoinGecko': 'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd',
+        'Binance': 'https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT',
+        'HTTPBin': 'https://httpbin.org/status/200'
+    }
+    
+    for name, url in test_urls.items():
+        try:
+            debug_log(f"🔍 Testing {name} connectivity...", "INFO", "connectivity_test")
+            response = requests.get(url, timeout=10)
+            if response.status_code == 200:
+                results[name] = f"✅ OK ({response.status_code})"
+                debug_log(f"✅ {name} connectivity successful", "SUCCESS", "connectivity_test")
+            else:
+                results[name] = f"⚠️ HTTP {response.status_code}"
+                debug_log(f"⚠️ {name} returned {response.status_code}", "WARNING", "connectivity_test")
+        except Exception as e:
+            results[name] = f"❌ Error: {str(e)[:50]}"
+            debug_log(f"❌ {name} connectivity failed: {e}", "ERROR", "connectivity_test")
+    
+    return results
+
 def get_rate_limit_status():
     """Get current rate limiting status for display"""
     status = {}
@@ -135,6 +189,19 @@ def make_rate_limited_request(url, service_name, timeout=5, max_retries=3):
     """
     import requests
     
+    # Debug: Try a simple request first to test connectivity
+    try:
+        debug_log(f"🔍 Testing simple request to {service_name}: {url[:60]}...", "INFO", "connectivity_test")
+        simple_response = requests.get(url, timeout=timeout)
+        if simple_response.status_code == 200:
+            debug_log(f"✅ Simple request successful for {service_name}", "SUCCESS", "connectivity_test")
+            return simple_response
+        else:
+            debug_log(f"⚠️ Simple request returned {simple_response.status_code} for {service_name}", "WARNING", "connectivity_test")
+    except Exception as e:
+        debug_log(f"❌ Simple request failed for {service_name}: {e}", "ERROR", "connectivity_test")
+    
+    # Continue with rate-limited approach
     for attempt in range(max_retries):
         # Check rate limits
         if not rate_limiter.can_make_request(service_name):
@@ -245,6 +312,11 @@ def get_usdt_inr_rate():
                 max_retries=2
             )
             
+            # If rate-limited request fails, try simple fallback
+            if not response:
+                debug_log(f"🚨 Rate-limited request failed for {source['name']}, trying simple fallback", "WARNING", "usdt_inr_fallback")
+                response = simple_api_request(source['url'], timeout=10)
+            
             if response and response.status_code == 200:
                 data = response.json()
                 rate = source['parser'](data)
@@ -302,6 +374,11 @@ def get_usd_eur_rate():
                 timeout=8,
                 max_retries=2
             )
+            
+            # If rate-limited request fails, try simple fallback
+            if not response:
+                debug_log(f"🚨 Rate-limited request failed for {source['name']}, trying simple fallback", "WARNING", "usd_eur_fallback")
+                response = simple_api_request(source['url'], timeout=10)
             
             if response and response.status_code == 200:
                 data = response.json()
@@ -396,16 +473,13 @@ def cached_get_crypto_prices():
         from multi_exchange import get_multi_exchange_prices
         debug_log("Successfully imported multi_exchange module", "SUCCESS", "module_import")
         
-        debug_log_api_call("Multi-Exchange", "get_multi_exchange_prices()", "STARTING")
+        debug_log("Starting multi-exchange price fetching", "INFO", "multi_exchange_start")
         result = get_multi_exchange_prices()
         
         processing_time = time.time() - time.time()  # Placeholder for actual timing
         
         if result and result.get('success_count', 0) > 0:
-            debug_log_api_call("Multi-Exchange", "get_multi_exchange_prices()", "SUCCESS", processing_time, 
-                             {'success_count': result.get('success_count'), 
-                              'total_count': result.get('total_count'),
-                              'sources_used': result.get('sources_used', [])})
+            debug_log(f"Multi-exchange success: {result.get('success_count')}/{result.get('total_count')} prices", "SUCCESS", "multi_exchange_success")
             
             prices = result.get('prices', {})
             debug_log(f"✅ Multi-exchange prices obtained: {list(prices.keys())}", "SUCCESS", "price_fetch")
@@ -629,7 +703,7 @@ def main():
     initialize_portfolio_session()
     
     # Add price refresh button with transparent status
-    refresh_col, status_col = st.columns([1, 3])
+    refresh_col, test_col, status_col = st.columns([1, 1, 2])
     with refresh_col:
         if st.button("🔄 Force Refresh Prices", type="secondary", help="Force fresh API calls"):
             cached_get_crypto_prices.clear()
@@ -647,6 +721,20 @@ def main():
                 for error in price_result.get('errors', []):
                     st.error(error)
             st.rerun()
+    
+    with test_col:
+        if st.button("🔍 Test APIs", type="secondary", help="Test API connectivity"):
+            with st.spinner("Testing API connectivity..."):
+                connectivity_results = test_api_connectivity()
+            
+            st.write("**API Connectivity Test Results:**")
+            for api_name, status in connectivity_results.items():
+                if "✅" in status:
+                    st.success(f"{api_name}: {status}")
+                elif "⚠️" in status:
+                    st.warning(f"{api_name}: {status}")
+                else:
+                    st.error(f"{api_name}: {status}")
     
     with status_col:
         # Show current API status
