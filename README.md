@@ -83,12 +83,16 @@ cp/
 - **Parallel Processing**: Concurrent API calls for faster response times
 - **Exchange Rates**: CoinGecko for USD/EUR & USD/AED, Binance P2P for USDT/INR
 - **Caching Strategy**: 60-second TTL for crypto prices, 5-minute TTL for forex rates
+- **Rate Limiting**: Smart rate limiting with service-specific limits and exponential backoff
 
 ### Performance Optimizations
 - Concurrent futures for parallel API execution
 - Streamlit session state for portfolio persistence
 - Intelligent error handling and graceful API fallbacks
 - Minimal dependencies for faster cloud deployment
+- **Smart Rate Limiting**: Thread-safe rate limiter with service-specific limits (CoinGecko: 10/min, Binance: 100/min)
+- **Exponential Backoff**: Automatic retry logic with increasing delays for rate-limited or failed requests
+- **Request Monitoring**: Live API usage tracking with visual status indicators
 
 ## Usage
 

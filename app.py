@@ -7,45 +7,189 @@ import time
 from datetime import datetime
 
 # Debug logging functions
-def debug_log(message, level="INFO", context=None, data=None):
-    """Enhanced debug logging with full session instrumentation"""
-    if 'debug_logs' not in st.session_state:
-        st.session_state.debug_logs = []
-        session_start = {
-            'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
-            'level': 'SYSTEM',
-            'message': '🚀 Debug session initialized',
-            'context': 'session_start',
-            'session_id': id(st.session_state),
-            'timestamp_full': datetime.now().isoformat(),
-            'log_sequence': 1
-        }
-        st.session_state.debug_logs.append(session_start)
-    
+import streamlit as st
+import time
+import threading
+from collections import defaultdict
+from datetime import datetime, timedelta
+
+def debug_log(message, level="INFO", category="general"):
+    """Enhanced debug logging with timestamps"""
     timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
-    timestamp_full = datetime.now().isoformat()
+    print(f"[{timestamp}] [{level}] [{category.upper()}] {message}")
+
+class RateLimiter:
+    """
+    Thread-safe rate limiter for API calls with different limits per service
+    """
+    def __init__(self):
+        self._calls = defaultdict(list)
+        self._lock = threading.Lock()
+        
+        # Rate limits per service (calls per minute)
+        self.limits = {
+            'coingecko': 10,     # CoinGecko free tier: 10-50 calls/min
+            'binance': 100,      # Binance: 1200 calls/min (weight-based)
+            'default': 30        # Conservative default
+        }
+        
+        # Backoff delays (seconds) when rate limited
+        self.backoff_delays = {
+            'coingecko': [1, 2, 5, 10],
+            'binance': [0.5, 1, 2, 3],
+            'default': [1, 3, 5, 10]
+        }
     
-    log_entry = {
-        'timestamp': timestamp,
-        'timestamp_full': timestamp_full,
-        'level': level,
-        'message': str(message),
-        'context': context,
-        'session_id': id(st.session_state),
-        'log_sequence': len(st.session_state.debug_logs) + 1
-    }
+    def can_make_request(self, service_name):
+        """Check if we can make a request to the service"""
+        with self._lock:
+            now = time.time()
+            service_key = service_name.lower()
+            
+            # Clean old entries (older than 1 minute)
+            self._calls[service_key] = [
+                call_time for call_time in self._calls[service_key] 
+                if now - call_time < 60
+            ]
+            
+            # Check if we're under the limit
+            limit = self.limits.get(service_key, self.limits['default'])
+            current_calls = len(self._calls[service_key])
+            
+            debug_log(f"🔍 Rate limit check for {service_name}: {current_calls}/{limit} calls in last minute", 
+                     "INFO", "rate_limiter")
+            
+            return current_calls < limit
     
-    if data is not None:
-        log_entry['data'] = data
+    def record_request(self, service_name):
+        """Record a successful request"""
+        with self._lock:
+            self._calls[service_name.lower()].append(time.time())
+            debug_log(f"📝 Recorded API call for {service_name}", "INFO", "rate_limiter")
     
-    st.session_state.debug_logs.append(log_entry)
+    def get_backoff_delay(self, service_name, attempt=0):
+        """Get backoff delay for rate limited service"""
+        service_key = service_name.lower()
+        delays = self.backoff_delays.get(service_key, self.backoff_delays['default'])
+        delay_index = min(attempt, len(delays) - 1)
+        return delays[delay_index]
+
+# Global rate limiter instance
+rate_limiter = RateLimiter()
+
+def get_rate_limit_status():
+    """Get current rate limiting status for display"""
+    status = {}
     
-    if level == "ERROR":
-        print(f"❌ [{timestamp}] ERROR: {message}")
-    elif level == "SUCCESS":
-        print(f"✅ [{timestamp}] SUCCESS: {message}")
-    else:
-        print(f"ℹ️ [{timestamp}] {level}: {message}")
+    services = ['coingecko', 'binance']
+    for service in services:
+        with rate_limiter._lock:
+            now = time.time()
+            # Clean old entries
+            rate_limiter._calls[service] = [
+                call_time for call_time in rate_limiter._calls[service] 
+                if now - call_time < 60
+            ]
+            
+            current_calls = len(rate_limiter._calls[service])
+            limit = rate_limiter.limits.get(service, rate_limiter.limits['default'])
+            
+            status[service] = {
+                'current': current_calls,
+                'limit': limit,
+                'percentage': (current_calls / limit) * 100,
+                'available': limit - current_calls
+            }
+    
+    return status
+
+def display_rate_limit_status():
+    """Display rate limiting status in the sidebar"""
+    if st.sidebar.checkbox("🔍 Show API Rate Limits", value=False):
+        st.sidebar.subheader("📊 API Rate Limits")
+        
+        status = get_rate_limit_status()
+        
+        for service, data in status.items():
+            # Color coding based on usage
+            if data['percentage'] > 80:
+                color = "🔴"
+            elif data['percentage'] > 60:
+                color = "🟡"
+            else:
+                color = "🟢"
+            
+            st.sidebar.write(f"{color} **{service.title()}**")
+            st.sidebar.write(f"   📈 {data['current']}/{data['limit']} calls/min")
+            st.sidebar.write(f"   📉 {data['available']} calls available")
+            
+            # Progress bar
+            progress = data['current'] / data['limit']
+            st.sidebar.progress(progress)
+            st.sidebar.write("---")
+
+# Enhanced request function with rate limiting
+def make_rate_limited_request(url, service_name, timeout=5, max_retries=3):
+    """
+    Make a rate-limited HTTP request with exponential backoff
+    """
+    import requests
+    
+    for attempt in range(max_retries):
+        # Check rate limits
+        if not rate_limiter.can_make_request(service_name):
+            delay = rate_limiter.get_backoff_delay(service_name, attempt)
+            debug_log(f"⏸️ Rate limit reached for {service_name}, waiting {delay}s (attempt {attempt + 1})", 
+                     "WARNING", "rate_limiter")
+            time.sleep(delay)
+            continue
+        
+        try:
+            # Make the request
+            headers = {
+                'User-Agent': f'StreamlitPortfolio/1.0',
+                'Accept': 'application/json',
+                'Connection': 'close'
+            }
+            
+            debug_log(f"🌐 Making request to {service_name}: {url[:60]}...", "INFO", "http_request")
+            response = requests.get(url, headers=headers, timeout=timeout)
+            
+            # Handle different response codes
+            if response.status_code == 200:
+                rate_limiter.record_request(service_name)
+                debug_log(f"✅ Successful response from {service_name}", "SUCCESS", "http_request")
+                return response
+            
+            elif response.status_code == 429:  # Rate limited
+                delay = rate_limiter.get_backoff_delay(service_name, attempt)
+                debug_log(f"🚫 Rate limited by {service_name} (HTTP 429), waiting {delay}s", 
+                         "WARNING", "rate_limiter")
+                time.sleep(delay)
+                continue
+            
+            elif response.status_code in [500, 502, 503, 504]:  # Server errors
+                delay = rate_limiter.get_backoff_delay(service_name, attempt)
+                debug_log(f"🔥 Server error from {service_name} (HTTP {response.status_code}), waiting {delay}s", 
+                         "ERROR", "http_request")
+                time.sleep(delay)
+                continue
+            
+            else:
+                debug_log(f"❌ HTTP error from {service_name}: {response.status_code}", "ERROR", "http_request")
+                break
+        
+        except requests.exceptions.Timeout:
+            debug_log(f"⏰ Timeout from {service_name} (attempt {attempt + 1})", "WARNING", "http_request")
+            if attempt < max_retries - 1:
+                time.sleep(1)
+        
+        except requests.exceptions.RequestException as e:
+            debug_log(f"🔗 Network error from {service_name}: {e}", "ERROR", "http_request")
+            break
+    
+    debug_log(f"❌ All attempts failed for {service_name}", "ERROR", "http_request")
+    return None
 
 def debug_log_api_call(exchange_name, endpoint, status, response_time=None, data=None):
     """Log API call details with standardized format"""
@@ -68,21 +212,22 @@ def debug_log_user_action(action, data=None):
     """Log user interaction with enhanced data capture"""
     debug_log(f"👤 User action: {action}", "USER", "user_interaction", data)
 
-# USDT/INR rate fetching
+# USDT/INR rate fetching with rate limiting
 @st.cache_data(ttl=300)  # 5-minute cache for exchange rates
 def get_usdt_inr_rate():
-    """Get USDT/INR exchange rate from multiple sources"""
-    import requests
+    """Get USDT/INR exchange rate from multiple sources with rate limiting"""
     
     # Try multiple sources for USDT/INR rate
     sources = [
         {
             'name': 'CoinGecko',
+            'service': 'coingecko',
             'url': 'https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=inr',
             'parser': lambda data: data.get('tether', {}).get('inr')
         },
         {
             'name': 'Binance',
+            'service': 'binance',
             'url': 'https://api.binance.com/api/v3/ticker/price?symbol=USDTINR',
             'parser': lambda data: float(data.get('price', 0)) if data.get('price') else None
         }
@@ -91,9 +236,16 @@ def get_usdt_inr_rate():
     for source in sources:
         try:
             debug_log(f"🔄 Fetching USDT/INR rate from {source['name']}", "INFO", "usdt_inr_fetch")
-            response = requests.get(source['url'], timeout=5)
             
-            if response.status_code == 200:
+            # Use rate-limited request
+            response = make_rate_limited_request(
+                url=source['url'], 
+                service_name=source['service'],
+                timeout=8,
+                max_retries=2
+            )
+            
+            if response and response.status_code == 200:
                 data = response.json()
                 rate = source['parser'](data)
                 
@@ -105,7 +257,7 @@ def get_usdt_inr_rate():
                         'success': True
                     }
             
-            debug_log(f"❌ {source['name']} USDT/INR failed: HTTP {response.status_code}", "ERROR", "usdt_inr_error")
+            debug_log(f"❌ {source['name']} USDT/INR failed to get valid data", "ERROR", "usdt_inr_error")
             
         except Exception as e:
             debug_log(f"❌ {source['name']} USDT/INR error: {e}", "ERROR", "usdt_inr_error")
@@ -118,21 +270,22 @@ def get_usdt_inr_rate():
         'success': False
     }
 
-# USD/EUR rate fetching
+# USD/EUR rate fetching with rate limiting
 @st.cache_data(ttl=300)  # 5-minute cache for exchange rates
 def get_usd_eur_rate():
-    """Get USD/EUR exchange rate from multiple sources"""
-    import requests
+    """Get USD/EUR exchange rate from multiple sources with rate limiting"""
     
     # Try multiple sources for USD/EUR rate
     sources = [
         {
             'name': 'CoinGecko',
+            'service': 'coingecko',
             'url': 'https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=eur',
             'parser': lambda data: data.get('tether', {}).get('eur')
         },
         {
             'name': 'Binance',
+            'service': 'binance',
             'url': 'https://api.binance.com/api/v3/ticker/price?symbol=EURUSDT',
             'parser': lambda data: 1 / float(data.get('price', 1)) if data.get('price') and float(data.get('price', 1)) > 0 else None
         }
@@ -141,9 +294,16 @@ def get_usd_eur_rate():
     for source in sources:
         try:
             debug_log(f"🔄 Fetching USD/EUR rate from {source['name']}", "INFO", "usd_eur_fetch")
-            response = requests.get(source['url'], timeout=5)
             
-            if response.status_code == 200:
+            # Use rate-limited request
+            response = make_rate_limited_request(
+                url=source['url'], 
+                service_name=source['service'],
+                timeout=8,
+                max_retries=2
+            )
+            
+            if response and response.status_code == 200:
                 data = response.json()
                 rate = source['parser'](data)
                 
@@ -155,7 +315,7 @@ def get_usd_eur_rate():
                         'success': True
                     }
             
-            debug_log(f"❌ {source['name']} USD/EUR failed: HTTP {response.status_code}", "ERROR", "usd_eur_error")
+            debug_log(f"❌ {source['name']} USD/EUR failed to get valid data", "ERROR", "usd_eur_error")
             
         except Exception as e:
             debug_log(f"❌ {source['name']} USD/EUR error: {e}", "ERROR", "usd_eur_error")
@@ -168,21 +328,22 @@ def get_usd_eur_rate():
         'success': False
     }
 
-# USD/AED rate fetching
+# USD/AED rate fetching with rate limiting
 @st.cache_data(ttl=300)  # 5-minute cache for exchange rates
 def get_usd_aed_rate():
-    """Get USD/AED exchange rate from multiple sources"""
-    import requests
+    """Get USD/AED exchange rate from multiple sources with rate limiting"""
     
     # Try multiple sources for USD/AED rate
     sources = [
         {
             'name': 'CoinGecko',
+            'service': 'coingecko',
             'url': 'https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=aed',
             'parser': lambda data: data.get('tether', {}).get('aed')
         },
         {
             'name': 'Binance',
+            'service': 'binance',
             'url': 'https://api.binance.com/api/v3/ticker/price?symbol=AEDUSDT',
             'parser': lambda data: 1 / float(data.get('price', 1)) if data.get('price') and float(data.get('price', 1)) > 0 else None
         }
@@ -191,9 +352,16 @@ def get_usd_aed_rate():
     for source in sources:
         try:
             debug_log(f"🔄 Fetching USD/AED rate from {source['name']}", "INFO", "usd_aed_fetch")
-            response = requests.get(source['url'], timeout=5)
             
-            if response.status_code == 200:
+            # Use rate-limited request
+            response = make_rate_limited_request(
+                url=source['url'], 
+                service_name=source['service'],
+                timeout=8,
+                max_retries=2
+            )
+            
+            if response and response.status_code == 200:
                 data = response.json()
                 rate = source['parser'](data)
                 
@@ -205,7 +373,7 @@ def get_usd_aed_rate():
                         'success': True
                     }
             
-            debug_log(f"❌ {source['name']} USD/AED failed: HTTP {response.status_code}", "ERROR", "usd_aed_error")
+            debug_log(f"❌ {source['name']} USD/AED failed to get valid data", "ERROR", "usd_aed_error")
             
         except Exception as e:
             debug_log(f"❌ {source['name']} USD/AED error: {e}", "ERROR", "usd_aed_error")
@@ -490,6 +658,9 @@ def main():
             st.warning(f"🟡 Live Prices: {valid_prices}/{total_prices} APIs working")
         else:
             st.error(f"🔴 Live Prices: {valid_prices}/{total_prices} APIs working")
+    
+    # Display rate limiting status in sidebar
+    display_rate_limit_status()
     
     col1, col2, col3, col4 = st.columns(4)
     
