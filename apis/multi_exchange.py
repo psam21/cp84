@@ -3,6 +3,13 @@ Multi-exchange API fallback system for cryptocurrency prices.
 Tries multiple exchanges in order until successful.
 Optimized for Streamlit Community Cloud reliability.
 """
+import concurrent.futures
+import time
+from utils.logging import debug_log
+from .binance_api import try_binance
+from .kucoin_api import try_kucoin
+from .coinbase_api import try_coinbase
+from .coingecko_api import try_coingecko
 
 def get_multi_exchange_prices():
     """
@@ -103,137 +110,6 @@ def get_multi_exchange_prices():
     print(f"🏁 DEBUG: Final results - Success: {results['success_count']}/4, Sources: {results['sources_used']}")
     return results
 
-def try_binance():
-    """Try to get prices from Binance"""
-    print("🔍 DEBUG: Starting try_binance() function")
-    
-    try:
-        print("🔍 DEBUG: Attempting to import binance_data module...")
-        from binance_data import get_binance_price
-        print("✅ DEBUG: Successfully imported get_binance_price from binance_data")
-        
-        symbols = [("BTC", "BTCUSDT"), ("ETH", "ETHUSDT"), ("BNB", "BNBUSDT"), ("POL", "POLUSDT")]
-        prices = {}
-        errors = []
-        
-        print(f"🔍 DEBUG: Will process {len(symbols)} symbols: {[s[0] for s in symbols]}")
-        
-        for i, (symbol, pair) in enumerate(symbols):
-            print(f"🔍 DEBUG: Processing {i+1}/{len(symbols)}: {symbol} ({pair})")
-            try:
-                print(f"🔍 DEBUG: Calling get_binance_price('{pair}')...")
-                price = get_binance_price(pair)
-                print(f"📊 DEBUG: get_binance_price returned: {price} (type: {type(price)})")
-                
-                if price is not None and price > 0:
-                    prices[symbol] = price
-                    print(f"✅ DEBUG: Binance {symbol} price accepted: {price}")
-                else:
-                    prices[symbol] = None
-                    error_msg = f"{symbol}: Invalid price returned: {price}"
-                    errors.append(error_msg)
-                    print(f"❌ DEBUG: Binance {symbol} invalid price: {price}")
-                    
-            except Exception as e:
-                prices[symbol] = None
-                error_msg = f"{symbol}: {str(e)}"
-                errors.append(error_msg)
-                print(f"❌ DEBUG: Binance {symbol} exception: {str(e)} (type: {type(e)})")
-        
-        result = {
-            'prices': prices,
-            'errors': errors,
-            'success_count': len([p for p in prices.values() if p is not None]),
-            'source': 'Binance'
-        }
-        
-        print(f"🏁 DEBUG: Binance result - Success: {result['success_count']}/4")
-        print(f"🏁 DEBUG: Binance prices: {prices}")
-        print(f"🏁 DEBUG: Binance errors: {errors}")
-        
-        return result
-        
-    except ImportError as import_err:
-        error_msg = f"Binance module not available: {str(import_err)}"
-        print(f"❌ DEBUG: Binance import error: {error_msg}")
-        raise Exception(error_msg)
-    except Exception as e:
-        error_msg = f"Binance unexpected error: {str(e)}"
-        print(f"❌ DEBUG: Binance unexpected error: {error_msg}")
-        raise Exception(error_msg)
-
-def try_kucoin():
-    """Try to get prices from KuCoin"""
-    try:
-        from kucoin_data import get_kucoin_prices
-        return get_kucoin_prices()
-    except ImportError:
-        raise Exception("KuCoin module not available")
-
-def try_coinbase():
-    """Try to get prices from Coinbase"""
-    try:
-        from coinbase_data import get_coinbase_prices
-        return get_coinbase_prices()
-    except ImportError:
-        raise Exception("Coinbase module not available")
-
-def try_coingecko():
-    """Try to get prices from CoinGecko (free API, no auth required)"""
-    import requests
-    
-    try:
-        # CoinGecko free API - very reliable for cloud deployments
-        url = "https://api.coingecko.com/api/v3/simple/price"
-        params = {
-            'ids': 'bitcoin,ethereum,binancecoin,polygon',  # CoinGecko IDs
-            'vs_currencies': 'usd'
-        }
-        
-        headers = {
-            'User-Agent': 'StreamlitApp/1.0',
-            'Accept': 'application/json',
-            'Connection': 'close'
-        }
-        
-        response = requests.get(url, params=params, headers=headers, timeout=10)
-        response.raise_for_status()
-        
-        data = response.json()
-        
-        # Map CoinGecko IDs to our symbol names
-        price_mapping = {
-            'bitcoin': 'BTC',
-            'ethereum': 'ETH', 
-            'binancecoin': 'BNB',
-            'polygon': 'POL'
-        }
-        
-        prices = {}
-        errors = []
-        
-        for coingecko_id, symbol in price_mapping.items():
-            if coingecko_id in data and 'usd' in data[coingecko_id]:
-                price = float(data[coingecko_id]['usd'])
-                if price > 0:
-                    prices[symbol] = price
-                    print(f"✅ CoinGecko {symbol}: ${price:,.2f}")
-                else:
-                    prices[symbol] = None
-                    errors.append(f"{symbol}: Invalid price {price}")
-            else:
-                prices[symbol] = None
-                errors.append(f"{symbol}: Missing from CoinGecko response")
-        
-        return {
-            'prices': prices,
-            'errors': errors,
-            'success_count': len([p for p in prices.values() if p is not None]),
-            'source': 'CoinGecko'
-        }
-        
-    except Exception as e:
-        raise Exception(f"CoinGecko API failed: {str(e)}")
 
 # Test function for the multi-exchange system
 def test_all_exchanges():

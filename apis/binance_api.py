@@ -1,7 +1,73 @@
 """
-Module to fetch data from Binance.
+Binance API integration for cryptocurrency price data.
+Free public API endpoint access.
 """
 import requests
+from utils.logging import debug_log
+from utils.http_utils import make_rate_limited_request
+
+
+def try_binance():
+    """Try to get prices from Binance"""
+    print("🔍 DEBUG: Starting try_binance() function")
+    
+    try:
+        symbols = [("BTC", "BTCUSDT"), ("ETH", "ETHUSDT"), ("BNB", "BNBUSDT"), ("POL", "POLUSDT")]
+        prices = {}
+        errors = []
+        
+        print(f"🔍 DEBUG: Will process {len(symbols)} symbols: {[s[0] for s in symbols]}")
+        
+        for i, (symbol, pair) in enumerate(symbols):
+            print(f"🔍 DEBUG: Processing {i+1}/{len(symbols)}: {symbol} ({pair})")
+            try:
+                print(f"🔍 DEBUG: Calling get_binance_price('{pair}')...")
+                price = get_binance_price(pair)
+                print(f"📊 DEBUG: get_binance_price returned: {price} (type: {type(price)})")
+                
+                if price is not None and price > 0:
+                    prices[symbol] = price
+                    print(f"✅ DEBUG: Binance {symbol} price accepted: {price}")
+                else:
+                    prices[symbol] = None
+                    error_msg = f"{symbol}: Invalid price returned: {price}"
+                    errors.append(error_msg)
+                    print(f"❌ DEBUG: Binance {symbol} invalid price: {price}")
+                    
+            except Exception as e:
+                prices[symbol] = None
+                error_msg = f"{symbol}: {str(e)}"
+                errors.append(error_msg)
+                print(f"❌ DEBUG: Binance {symbol} exception: {str(e)} (type: {type(e)})")
+        
+        result = {
+            'prices': prices,
+            'errors': errors,
+            'success_count': len([p for p in prices.values() if p is not None]),
+            'source': 'Binance'
+        }
+        
+        print(f"🏁 DEBUG: Binance result - Success: {result['success_count']}/4")
+        print(f"🏁 DEBUG: Binance prices: {prices}")
+        print(f"🏁 DEBUG: Binance errors: {errors}")
+        
+        return result
+        
+    except Exception as e:
+        error_msg = f"Binance unexpected error: {str(e)}"
+        print(f"❌ DEBUG: Binance unexpected error: {error_msg}")
+        raise Exception(error_msg)
+
+
+def get_binance_crypto_prices():
+    """
+    Get cryptocurrency prices from Binance API
+    
+    Returns:
+        dict: Dictionary with price data and metadata
+    """
+    return try_binance()
+
 
 def get_binance_price(symbol):
     """

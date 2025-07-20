@@ -1,133 +1,64 @@
-# Portfolio Value Calculator
+# Cryptocurrency Portfolio Calculator
 
-A streamlined cryptocurrency portfolio calculator built with Streamlit, featuring real-time price tracking and multi-currency support.
+Real-time cryptocurrency portfolio tracking with multi-exchange price data and currency conversions.
 
 ## Features
 
-- **Real-time Price Data**: Fetches live cryptocurrency prices from multiple exchanges with parallel processing
-- **Multi-currency Portfolio**: View portfolio value in USD, EUR, AED, INR, and crypto equivalents (BTC, ETH, BNB)
-- **Live Exchange Rates**: Real-time USDT/INR, USD/EUR, and USD/AED exchange rates
-- **9-Box Dashboard**: Clean, uniform layout with equal-sized value boxes
-- **Robust API System**: Multi-exchange fallback system (Binance → KuCoin → Coinbase → CoinGecko)
-- **Optimized Performance**: Concurrent API calls with intelligent caching (60s crypto prices, 5min forex rates)
+- **Live Price Data**: Multi-exchange API support (Binance, KuCoin, Coinbase, CoinGecko)
+- **Multi-Currency Display**: USD, EUR, AED, INR, and crypto equivalents (BTC, ETH, BNB)
+- **Real-time Exchange Rates**: Live USDT/INR, USD/EUR, USD/AED rates
+- **Performance Optimized**: Parallel API calls with intelligent caching
+- **Responsive UI**: Clean 9-box dashboard layout
 
-## Portfolio Display
+## Supported Assets
 
-The application features a clean 9-box layout showing:
-
-**Portfolio Values:**
-- 💰 USD Value - Total portfolio in US Dollars
-- 💶 EUR Value - Total portfolio in Euros  
-- 🏛️ AED Value - Total portfolio in UAE Dirhams
-- 🇮🇳 INR Value - Total portfolio in Indian Rupees
-
-**Crypto Equivalents:**
-- ₿ BTC Equivalent - Portfolio value in Bitcoin
-- ⟠ ETH Equivalent - Portfolio value in Ethereum
-- 🟡 BNB Equivalent - Portfolio value in Binance Coin
-
-**Live Rates:**
-- 💱 USDT/INR Rate - Real-time Tether to Indian Rupee exchange rate
-- 🔄 Last Updated - Timestamp of latest price refresh
-
-## Default Portfolio
-
-The application comes with preset holdings:
-- **Bitcoin (BTC)**: 0.9997
-- **Ethereum (ETH)**: 9.9983
-- **Binance Coin (BNB)**: 29.5623
-- **Polygon (POL)**: 4986.01
+- **Bitcoin (BTC)** - Digital gold
+- **Ethereum (ETH)** - Smart contract platform  
+- **Binance Coin (BNB)** - Exchange utility token
+- **Polygon (POL)** - Layer 2 scaling solution
 
 ## Quick Start
 
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/psam21/cp.git
-   cd cp
-   ```
+```bash
+# Clone and setup
+git clone https://github.com/psam21/cp84.git
+cd cp84
+pip install -r requirements.txt
 
-2. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. **Run the application**:
-   ```bash
-   streamlit run app.py
-   ```
-
-4. **Access the app**: Open your browser to `http://localhost:8501`
-
-## Project Structure
-
-```
-cp/
-├── app.py                 # Main Streamlit application
-├── multi_exchange.py      # Multi-exchange price fetching system
-├── binance_data.py        # Binance API integration
-├── coinbase_data.py       # Coinbase API integration  
-├── kucoin_data.py         # KuCoin API integration
-├── requirements.txt       # Python dependencies
-└── README.md             # Project documentation
+# Run application
+streamlit run app.py
+# Access at http://localhost:8501
 ```
 
-## Technical Details
+## Architecture
 
-### Dependencies
-- `streamlit>=1.28.0` - Web application framework
-- `requests>=2.31.0` - HTTP library for API calls
+```
+cp84/
+├── app.py                 # Main application (82 lines)
+├── apis/                  # Exchange API integrations
+├── utils/                 # Business logic & calculations
+├── pages/                 # UI components
+└── tests/                 # Test suite
+```
 
-### API Architecture
-- **Primary Source**: Binance API for crypto prices
-- **Fallback Chain**: KuCoin → Coinbase → CoinGecko APIs
-- **Parallel Processing**: Concurrent API calls for faster response times
-- **Exchange Rates**: CoinGecko for USD/EUR & USD/AED, Binance P2P for USDT/INR
-- **Caching Strategy**: 60-second TTL for crypto prices, 5-minute TTL for forex rates
-- **Rate Limiting**: Smart rate limiting with service-specific limits and exponential backoff
+## Technical Features
 
-### Performance Optimizations
-- Concurrent futures for parallel API execution
-- Streamlit session state for portfolio persistence
-- Intelligent error handling and graceful API fallbacks
-- Minimal dependencies for faster cloud deployment
-- **Smart Rate Limiting**: Thread-safe rate limiter with service-specific limits (CoinGecko: 10/min, Binance: 100/min)
-- **Exponential Backoff**: Automatic retry logic with increasing delays for rate-limited or failed requests
-- **Request Monitoring**: Live API usage tracking with visual status indicators
+- **Multi-Exchange**: Binance, KuCoin, Coinbase, CoinGecko APIs
+- **Parallel Processing**: Concurrent API calls (~1s response time)
+- **Rate Limiting**: Smart throttling with usage monitoring
+- **Caching**: 60s crypto prices, 5min forex rates
+- **Error Handling**: Graceful degradation with partial data
 
-## Usage
+## Dependencies
 
-### Portfolio Management
-1. **View Real-time Values**: The 9-box dashboard displays live portfolio values in multiple currencies
-2. **Edit Holdings**: Click any cryptocurrency amount to modify your holdings
-3. **Refresh Data**: Click "🔄 Force Refresh Prices" for latest market data
-4. **Portfolio Controls**: Use "Reset to Default" or "Clear All" buttons to manage holdings
+```txt
+streamlit>=1.28.0
+requests>=2.31.0
+```
 
-### Interface Features
-- **Responsive Design**: Uniform 110px × 120px boxes with mobile-friendly layout
-- **Live Updates**: Automatic refresh every 60 seconds for crypto prices
-- **Visual Indicators**: Color-coded boxes with currency symbols and emojis
-- **Error Handling**: Clear status messages for API failures or connectivity issues
+## License
 
-## API Sources & Reliability
-
-The application uses a robust multi-source approach for maximum uptime:
-
-**Cryptocurrency Prices:**
-- Binance API (Primary) - Highest reliability and speed
-- KuCoin API (Fallback) - Secondary data source
-- Coinbase API (Fallback) - Additional reliability layer
-- CoinGecko API (Final fallback) - Free tier, no authentication required
-
-**Exchange Rates:**
-- CoinGecko API - USD/EUR and USD/AED rates
-- Binance P2P API - Live USDT/INR trading rates
-## Development Notes
-
-This is a streamlined version of the original Bitcoin dashboard, optimized for:
-- **Portfolio-focused functionality** - Removed Bitcoin metrics, mempool data, and market analysis
-- **Multi-currency support** - Added EUR, AED currencies alongside USD, INR
-- **Performance optimization** - Reduced from 150KB+ to ~67KB essential files only
-- **Cloud deployment** - Optimized for Streamlit Community Cloud with robust API fallbacks
+MIT License - see repository for details.
 
 ### Project Evolution
 - **Original**: Comprehensive Bitcoin dashboard with extensive market data

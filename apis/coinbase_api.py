@@ -4,6 +4,25 @@ Coinbase often has excellent reliability on cloud platforms.
 """
 import requests
 
+
+def try_coinbase():
+    """Try to get prices from Coinbase"""
+    try:
+        return get_coinbase_prices()
+    except Exception as e:
+        raise Exception(f"Coinbase API failed: {str(e)}")
+
+
+def get_coinbase_crypto_prices():
+    """
+Coinbase API integration for cryptocurrency price data.
+No authentication required for basic price data.
+"""
+import requests
+from utils.logging import debug_log
+from utils.http_utils import make_rate_limited_request
+
+
 def get_coinbase_price(symbol):
     """
     Fetches the latest price for a symbol from Coinbase Pro.

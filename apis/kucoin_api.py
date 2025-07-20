@@ -3,6 +3,26 @@ Module to fetch data from KuCoin as an alternative to Binance.
 KuCoin often has better reliability on cloud platforms.
 """
 import requests
+from utils.logging import debug_log
+
+
+def try_kucoin():
+    """Try to get prices from KuCoin"""
+    try:
+        return get_kucoin_prices()
+    except Exception as e:
+        raise Exception(f"KuCoin API failed: {str(e)}")
+
+
+def get_kucoin_crypto_prices():
+    """
+    Get cryptocurrency prices from KuCoin API
+    
+    Returns:
+        dict: Dictionary with price data and metadata
+    """
+    return try_kucoin()
+
 
 def get_kucoin_price(symbol):
     """
