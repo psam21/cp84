@@ -12,8 +12,7 @@ from pages.portfolio_ui import (
     initialize_portfolio_session,
     get_portfolio_css,
     display_portfolio_summary_boxes,
-    display_portfolio_input_cards,
-    display_portfolio_management_buttons
+    display_portfolio_input_cards
 )
 from pages.exchange_rates_ui import (
     get_usdt_inr_rate,
@@ -72,8 +71,8 @@ def main():
         st.error(f"❌ Error calculating portfolio values: {portfolio_result['error']}")
         st.info("🔄 Please try refreshing prices or check API connectivity.")
     
-    # Portfolio management buttons with price controls
-    display_portfolio_management_buttons(binance_prices)
+    # Portfolio management buttons with price controls (hidden from users)
+    # display_portfolio_management_buttons(binance_prices)
 
 if __name__ == "__main__":
     main()
