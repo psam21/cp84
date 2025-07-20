@@ -6,9 +6,10 @@ Real-time cryptocurrency portfolio tracking with multi-exchange price data and c
 
 - **Live Price Data**: Multi-exchange API support (Binance, KuCoin, Coinbase, CoinGecko)
 - **Multi-Currency Display**: USD, EUR, AED, INR, and crypto equivalents (BTC, ETH, BNB)
+- **Market Sentiment**: Real-time Fear & Greed Index with visual indicators
 - **Real-time Exchange Rates**: Live USDT/INR, USD/EUR, USD/AED rates
 - **Performance Optimized**: Parallel API calls with intelligent caching
-- **Responsive UI**: Clean 9-box dashboard layout
+- **Responsive UI**: Clean 10-box dashboard layout with sentiment analysis
 
 ## Supported Assets
 
@@ -44,9 +45,10 @@ cp84/
 ## Technical Features
 
 - **Multi-Exchange**: Binance, KuCoin, Coinbase, CoinGecko APIs
+- **Market Psychology**: Alternative.me Fear & Greed Index integration
 - **Parallel Processing**: Concurrent API calls (~1s response time)
 - **Rate Limiting**: Smart throttling with usage monitoring
-- **Caching**: 60s crypto prices, 5min forex rates
+- **Caching**: 60s crypto prices, 5min forex rates, 5min sentiment data
 - **Error Handling**: Graceful degradation with partial data
 
 ## Dependencies
@@ -75,6 +77,8 @@ Feel free to fork this repository and submit pull requests for improvements. The
 - Historical portfolio tracking
 - Export/import portfolio data
 - Price alerts and notifications
+- Historical Fear & Greed Index trends
+- Advanced sentiment analysis features
 
 ## License
 

@@ -4,6 +4,7 @@ API tests for cryptocurrency exchanges and rate limiting.
 import unittest
 import time
 from ..apis import get_multi_exchange_prices
+from ..apis.fear_greed_api import get_fear_greed_index, test_fear_greed_connectivity
 from ..utils import rate_limiter, debug_log
 
 
@@ -93,6 +94,49 @@ class TestAPIs(unittest.TestCase):
         
         debug_log("Rate limiting test passed", "SUCCESS", "test")
 
+    def test_fear_greed_connectivity(self):
+        """Test Fear & Greed Index API connectivity"""
+        debug_log("Testing Fear & Greed API connectivity", "INFO", "test")
+        
+        success, message = test_fear_greed_connectivity()
+        
+        # Should return a tuple with success status and message
+        self.assertIsInstance(success, bool)
+        self.assertIsInstance(message, str)
+        
+        debug_log(f"Fear & Greed connectivity: {message}", "INFO", "test")
+
+    def test_fear_greed_data(self):
+        """Test Fear & Greed Index data retrieval"""
+        debug_log("Testing Fear & Greed data retrieval", "INFO", "test")
+        
+        try:
+            data = get_fear_greed_index()
+            
+            if data is not None:
+                # Check data structure
+                self.assertIsInstance(data, dict)
+                self.assertIn('value', data)
+                self.assertIn('value_classification', data)
+                
+                # Check value is in valid range
+                value = data['value']
+                self.assertIsInstance(value, int)
+                self.assertGreaterEqual(value, 0)
+                self.assertLessEqual(value, 100)
+                
+                # Check classification is valid
+                valid_classifications = ['Extreme Fear', 'Fear', 'Neutral', 'Greed', 'Extreme Greed']
+                self.assertIn(data['value_classification'], valid_classifications)
+                
+                debug_log(f"Fear & Greed data test passed: {value} - {data['value_classification']}", 
+                         "SUCCESS", "test")
+            else:
+                debug_log("Fear & Greed API returned None - may be network issue", "WARNING", "test")
+                
+        except Exception as e:
+            self.fail(f"Fear & Greed data retrieval failed: {str(e)}")
+
 
 def test_api_connectivity():
     """Standalone function to test API connectivity"""
@@ -110,6 +154,18 @@ def test_rate_limiting():
     """Standalone function to test rate limiting"""
     test = TestAPIs()
     test.test_rate_limiting()
+
+
+def test_fear_greed_connectivity():
+    """Standalone function to test Fear & Greed connectivity"""
+    test = TestAPIs()
+    test.test_fear_greed_connectivity()
+
+
+def test_fear_greed_data():
+    """Standalone function to test Fear & Greed data retrieval"""
+    test = TestAPIs()
+    test.test_fear_greed_data()
 
 
 if __name__ == '__main__':

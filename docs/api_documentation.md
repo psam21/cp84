@@ -120,6 +120,46 @@ Uses CoinGecko IDs:
 - BNB: `binancecoin`
 - POL: `polygon`
 
+### 5. Alternative.me Fear & Greed Index
+
+**Endpoint**: `https://api.alternative.me/fng/`
+**Rate Limit**: 10 requests per minute (conservative)
+**Authentication**: None required
+
+#### Usage
+```python
+from apis.fear_greed_api import get_fear_greed_index, test_fear_greed_connectivity
+
+# Get current Fear & Greed Index
+result = get_fear_greed_index()
+
+# Test connectivity
+success, message = test_fear_greed_connectivity()
+```
+
+#### Response Format
+```json
+{
+  "value": 72,
+  "value_classification": "Greed",
+  "timestamp": "1642781234",
+  "time_until_update": "12h"
+}
+```
+
+#### Index Classifications
+- **0-24**: Extreme Fear 😰 (Red)
+- **25-49**: Fear 😨 (Orange)
+- **50-74**: Neutral 😐 (Yellow)
+- **75-89**: Greed 😊 (Light Green)
+- **90-100**: Extreme Greed 🤑 (Dark Green)
+
+#### Features
+- **Caching**: 5-minute cache (index updates daily)
+- **Error Handling**: Graceful fallback when API fails
+- **Visual Display**: Progress bar with color-coded sentiment
+- **Market Context**: Provides trading advice based on sentiment
+
 ## Multi-Exchange Coordination
 
 ### Priority Order
@@ -127,6 +167,7 @@ Uses CoinGecko IDs:
 2. **KuCoin** - Good cloud compatibility
 3. **Coinbase** - Excellent for available coins
 4. **CoinGecko** - Always available fallback
+5. **Alternative.me** - Independent sentiment data source
 
 ### Parallel Processing
 ```python

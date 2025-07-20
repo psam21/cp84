@@ -4,6 +4,8 @@ Portfolio UI components for displaying cryptocurrency portfolio information.
 import streamlit as st
 from utils.logging import debug_log
 from utils.portfolio_calculator import calculate_portfolio_values, get_failed_apis, calculate_crypto_equivalents
+from apis.fear_greed_api import get_fear_greed_index
+from utils.fear_greed_utils import format_fear_greed_display
 
 
 def display_portfolio_input_cards(binance_prices):
@@ -645,6 +647,26 @@ def generate_portfolio_summary_boxes(
                 <div class="portfolio-amount" style="color: #555;">Price unavailable</div>
             </div>'''
         
+        # Fear & Greed Index
+        fear_greed_data = get_fear_greed_index()
+        fear_greed_display = format_fear_greed_display(fear_greed_data)
+        
+        # Create progress bar for visual representation
+        progress_value = fear_greed_display.get('progress_value', 0)
+        progress_color = fear_greed_display.get('progress_color', 'gray')
+        progress_width = f"{progress_value}%" if progress_value > 0 else "0%"
+        
+        portfolio_html += f'''
+        <div class="portfolio-box" style="background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%); color: #333;">
+            <div class="portfolio-emoji">{fear_greed_display['emoji']}</div>
+            <div class="portfolio-label" style="color: #333;">Fear & Greed</div>
+            <div class="portfolio-value" style="color: #333;">{fear_greed_display['value']}</div>
+            <div class="portfolio-amount" style="color: #555;">{fear_greed_display['subtitle']}</div>
+            <div style="margin-top: 5px; width: 100%; background-color: #e0e0e0; border-radius: 6px; height: 6px; overflow: hidden;">
+                <div style="width: {progress_width}; background-color: {progress_color}; height: 100%; transition: width 0.3s ease;"></div>
+            </div>
+        </div>'''
+        
         # Asset Distribution/Portfolio Stats
         non_zero_assets = sum(1 for amount in [btc_amount, eth_amount, bnb_amount, pol_amount] if amount > 0)
         largest_asset = "N/A"
@@ -669,8 +691,9 @@ def generate_portfolio_summary_boxes(
             <div class="portfolio-amount" style="color: #555;">Largest: {largest_asset} ({largest_percentage:.1f}%)</div>
         </div>'''
     else:
-        # No valid prices fallback (9 boxes for consistency)
-        for emoji, label in [("💵", "USD Value"), ("🇪🇺", "EUR Value"), ("🇦🇪", "AED Value"), ("🇮🇳", "INR Value"), ("💱", "USDT/INR Rate"), ("₿", "BTC Equivalent"), ("⟠", "ETH Equivalent"), ("🔸", "BNB Equivalent"), ("📊", "Portfolio Stats")]:
+        # No valid prices fallback - but Fear & Greed should still work
+        # First add the regular failed API boxes
+        for emoji, label in [("💵", "USD Value"), ("🇪🇺", "EUR Value"), ("🇦🇪", "AED Value"), ("🇮🇳", "INR Value"), ("💱", "USDT/INR Rate"), ("₿", "BTC Equivalent"), ("⟠", "ETH Equivalent"), ("🔸", "BNB Equivalent")]:
             portfolio_html += f'''
             <div class="portfolio-box" style="background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%); color: #333;">
                 <div class="portfolio-emoji">{emoji}</div>
@@ -678,6 +701,34 @@ def generate_portfolio_summary_boxes(
                 <div class="portfolio-value" style="color: #333;">No Valid Prices</div>
                 <div class="portfolio-amount" style="color: #555;">Check APIs</div>
             </div>'''
+        
+        # Fear & Greed Index (should work even when crypto prices fail)
+        fear_greed_data = get_fear_greed_index()
+        fear_greed_display = format_fear_greed_display(fear_greed_data)
+        
+        progress_value = fear_greed_display.get('progress_value', 0)
+        progress_color = fear_greed_display.get('progress_color', 'gray')
+        progress_width = f"{progress_value}%" if progress_value > 0 else "0%"
+        
+        portfolio_html += f'''
+        <div class="portfolio-box" style="background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%); color: #333;">
+            <div class="portfolio-emoji">{fear_greed_display['emoji']}</div>
+            <div class="portfolio-label" style="color: #333;">Fear & Greed</div>
+            <div class="portfolio-value" style="color: #333;">{fear_greed_display['value']}</div>
+            <div class="portfolio-amount" style="color: #555;">{fear_greed_display['subtitle']}</div>
+            <div style="margin-top: 5px; width: 100%; background-color: #e0e0e0; border-radius: 6px; height: 6px; overflow: hidden;">
+                <div style="width: {progress_width}; background-color: {progress_color}; height: 100%; transition: width 0.3s ease;"></div>
+            </div>
+        </div>'''
+        
+        # Portfolio Stats box
+        portfolio_html += f'''
+        <div class="portfolio-box" style="background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%); color: #333;">
+            <div class="portfolio-emoji">📊</div>
+            <div class="portfolio-label" style="color: #333;">Portfolio Stats</div>
+            <div class="portfolio-value" style="color: #333;">No Valid Prices</div>
+            <div class="portfolio-amount" style="color: #555;">Check APIs</div>
+        </div>'''
     
     portfolio_html += '</div>'
     return portfolio_html

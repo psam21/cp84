@@ -27,6 +27,7 @@ def test_api_connectivity():
     test_urls = {
         'CoinGecko': 'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd',
         'Binance': 'https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT',
+        'Fear & Greed': 'https://api.alternative.me/fng/',
         'HTTPBin': 'https://httpbin.org/status/200'
     }
     

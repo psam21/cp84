@@ -13,6 +13,7 @@ cp84/
 
 **Responsibilities**:
 - Interface with cryptocurrency exchanges (Binance, KuCoin, Coinbase etc)
+- Fetch market sentiment data (Alternative.me Fear & Greed Index)
 - Handle API authentication and rate limiting
 - Normalize data formats across different sources
 - Provide unified data interfaces to upper layers
@@ -156,6 +157,7 @@ External APIs
 
 ### **APIs Modules**
 - Each exchange has its own module
+- Market sentiment data through dedicated Fear & Greed API
 - Shared aggregation layer combines results
 - Failures in one API don't affect others
 - Easy to add new data sources
@@ -223,8 +225,8 @@ External APIs
 
 
 ### **Feature Scaling**
-- New APIs → Add to `/apis/` directory
-- New calculations → Add to `/utils/` directory  
+- New APIs → Add to `/apis/` directory (e.g., `fear_greed_api.py`)
+- New calculations → Add to `/utils/` directory (e.g., `fear_greed_utils.py`)
 - New pages → Add to `/pages/` directory
 - Minimal impact on existing code
 
