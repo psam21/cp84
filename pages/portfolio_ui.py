@@ -19,18 +19,16 @@ def display_portfolio_input_cards(binance_prices):
     bnb_price = binance_prices.get('BNB')
     pol_price = binance_prices.get('POL')
     
-    # Calculate portfolio values first for enhanced display
-    btc_amount = st.session_state.portfolio['btc']
-    eth_amount = st.session_state.portfolio['eth']
-    bnb_amount = st.session_state.portfolio['bnb']
-    pol_amount = st.session_state.portfolio['pol']
-    
-    btc_value = btc_amount * btc_price if btc_price and btc_price > 0 else None
-    eth_value = eth_amount * eth_price if eth_price and eth_price > 0 else None
-    bnb_value = bnb_amount * bnb_price if bnb_price and bnb_price > 0 else None
-    pol_value = pol_amount * pol_price if pol_price and pol_price > 0 else None
-    
     with col1:
+        btc_amount = st.number_input("BTC Holdings", 
+                                   value=st.session_state.portfolio['btc'], 
+                                   step=0.01, format="%.8f", key="btc_input",
+                                   help="Enter your Bitcoin holdings",
+                                   label_visibility="collapsed")
+        
+        # Calculate portfolio value with current input
+        btc_value = btc_amount * btc_price if btc_price and btc_price > 0 else None
+        
         if btc_price and btc_price > 0:
             price_display = f"${btc_price:,.0f}"
             card_class = "crypto-btc"
@@ -49,13 +47,17 @@ def display_portfolio_input_cards(binance_prices):
             </div>
         </div>
         """, unsafe_allow_html=True)
-        btc_amount = st.number_input("BTC Holdings", 
-                                   value=st.session_state.portfolio['btc'], 
-                                   step=0.01, format="%.8f", key="btc_input",
-                                   help="Enter your Bitcoin holdings",
-                                   label_visibility="collapsed")
     
     with col2:
+        eth_amount = st.number_input("ETH Holdings", 
+                                   value=st.session_state.portfolio['eth'], 
+                                   step=0.1, format="%.4f", key="eth_input",
+                                   help="Enter your Ethereum holdings",
+                                   label_visibility="collapsed")
+        
+        # Calculate portfolio value with current input
+        eth_value = eth_amount * eth_price if eth_price and eth_price > 0 else None
+        
         if eth_price and eth_price > 0:
             price_display = f"${eth_price:,.0f}"
             card_class = "crypto-eth"
@@ -74,13 +76,17 @@ def display_portfolio_input_cards(binance_prices):
             </div>
         </div>
         """, unsafe_allow_html=True)
-        eth_amount = st.number_input("ETH Holdings", 
-                                   value=st.session_state.portfolio['eth'], 
-                                   step=0.1, format="%.4f", key="eth_input",
-                                   help="Enter your Ethereum holdings",
-                                   label_visibility="collapsed")
     
     with col3:
+        bnb_amount = st.number_input("BNB Holdings", 
+                                   value=st.session_state.portfolio['bnb'], 
+                                   step=0.1, format="%.4f", key="bnb_input",
+                                   help="Enter your BNB holdings",
+                                   label_visibility="collapsed")
+        
+        # Calculate portfolio value with current input
+        bnb_value = bnb_amount * bnb_price if bnb_price and bnb_price > 0 else None
+        
         if bnb_price and bnb_price > 0:
             price_display = f"${bnb_price:,.0f}"
             card_class = "crypto-bnb"
@@ -99,13 +105,17 @@ def display_portfolio_input_cards(binance_prices):
             </div>
         </div>
         """, unsafe_allow_html=True)
-        bnb_amount = st.number_input("BNB Holdings", 
-                                   value=st.session_state.portfolio['bnb'], 
-                                   step=0.1, format="%.4f", key="bnb_input",
-                                   help="Enter your BNB holdings",
-                                   label_visibility="collapsed")
     
     with col4:
+        pol_amount = st.number_input("POL Holdings", 
+                                   value=st.session_state.portfolio['pol'], 
+                                   step=1.0, format="%.2f", key="pol_input",
+                                   help="Enter your Polygon holdings",
+                                   label_visibility="collapsed")
+        
+        # Calculate portfolio value with current input
+        pol_value = pol_amount * pol_price if pol_price and pol_price > 0 else None
+        
         if pol_price and pol_price > 0:
             price_display = f"${pol_price:,.4f}"
             card_class = "crypto-pol"
@@ -124,11 +134,6 @@ def display_portfolio_input_cards(binance_prices):
             </div>
         </div>
         """, unsafe_allow_html=True)
-        pol_amount = st.number_input("POL Holdings", 
-                                   value=st.session_state.portfolio['pol'], 
-                                   step=1.0, format="%.2f", key="pol_input",
-                                   help="Enter your Polygon holdings",
-                                   label_visibility="collapsed")
     
     # Update session state portfolio
     st.session_state.portfolio['btc'] = btc_amount
