@@ -21,7 +21,7 @@ from pages.exchange_rates_ui import (
     get_usd_aed_rate
 )
 from pages.api_status_ui import display_rate_limit_status
-from pages.price_control_ui import display_price_control_bar, handle_price_loading
+from pages.price_control_ui import handle_price_loading
 
 # Global rate limiter instance
 rate_limiter = RateLimiter()
@@ -43,9 +43,6 @@ def main():
 
     # Main Portfolio Interface
     st.header("💼 Portfolio Value Calculator")
-    
-    # Price control bar (refresh, test, status)
-    display_price_control_bar(binance_prices)
     
     # Display rate limiting status in sidebar
     display_rate_limit_status(rate_limiter)
@@ -75,8 +72,8 @@ def main():
         st.error(f"❌ Error calculating portfolio values: {portfolio_result['error']}")
         st.info("🔄 Please try refreshing prices or check API connectivity.")
     
-    # Portfolio management buttons
-    display_portfolio_management_buttons()
+    # Portfolio management buttons with price controls
+    display_portfolio_management_buttons(binance_prices)
 
 if __name__ == "__main__":
     main()

@@ -44,7 +44,6 @@ def display_portfolio_input_cards(binance_prices):
         <div class="metric-card {card_class}">
             <h4>₿ Bitcoin (BTC)</h4>
             <h2>{price_display}</h2>
-            <p>{'Current Price' if btc_price and btc_price > 0 else 'Price Unavailable'}</p>
             <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.2);">
                 <small>Portfolio Value: <strong>{portfolio_value}</strong></small>
             </div>
@@ -70,7 +69,6 @@ def display_portfolio_input_cards(binance_prices):
         <div class="metric-card {card_class}">
             <h4>⟠ Ethereum (ETH)</h4>
             <h2>{price_display}</h2>
-            <p>{'Current Price' if eth_price and eth_price > 0 else 'Price Unavailable'}</p>
             <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.2);">
                 <small>Portfolio Value: <strong>{portfolio_value}</strong></small>
             </div>
@@ -96,7 +94,6 @@ def display_portfolio_input_cards(binance_prices):
         <div class="metric-card {card_class}">
             <h4>🔸 Binance Coin (BNB)</h4>
             <h2>{price_display}</h2>
-            <p>{'Current Price' if bnb_price and bnb_price > 0 else 'Price Unavailable'}</p>
             <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.2);">
                 <small>Portfolio Value: <strong>{portfolio_value}</strong></small>
             </div>
@@ -122,7 +119,6 @@ def display_portfolio_input_cards(binance_prices):
         <div class="metric-card {card_class}">
             <h4>🔷 Polygon (POL)</h4>
             <h2>{price_display}</h2>
-            <p>{'Current Price' if pol_price and pol_price > 0 else 'Price Unavailable'}</p>
             <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.2);">
                 <small>Portfolio Value: <strong>{portfolio_value}</strong></small>
             </div>
@@ -193,6 +189,34 @@ def get_portfolio_css():
         margin: 10px 0;
         box-shadow: 0 4px 15px rgba(0,0,0,0.1);
         transition: transform 0.3s ease, box-shadow 0.3s ease;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+    .metric-card h4 {
+        margin: 0 0 10px 0;
+        text-align: center;
+        width: 100%;
+    }
+    .metric-card h2 {
+        margin: 0 0 10px 0;
+        text-align: center;
+        width: 100%;
+    }
+    .metric-card p {
+        margin: 0 0 10px 0;
+        text-align: center;
+        width: 100%;
+    }
+    .metric-card div {
+        text-align: center;
+        width: 100%;
+    }
+    .metric-card small {
+        text-align: center;
+        display: block;
+        width: 100%;
     }
     .metric-card:hover {
         transform: translateY(-5px);
@@ -230,6 +254,7 @@ def get_portfolio_css():
         display: flex;
         flex-direction: column;
         justify-content: center;
+        align-items: center;
     }
     .portfolio-box:hover {
         transform: translateY(-2px);
@@ -239,6 +264,8 @@ def get_portfolio_css():
         font-size: 20px;
         margin-bottom: 4px;
         display: block;
+        text-align: center;
+        width: 100%;
     }
     .portfolio-label {
         font-size: 11px;
@@ -248,6 +275,8 @@ def get_portfolio_css():
         line-height: 1.2;
         text-transform: uppercase;
         letter-spacing: 0.5px;
+        text-align: center;
+        width: 100%;
     }
     .portfolio-value {
         font-size: 16px;
@@ -255,12 +284,16 @@ def get_portfolio_css():
         color: #2c3e50;
         margin: 4px 0;
         line-height: 1.2;
+        text-align: center;
+        width: 100%;
     }
     .portfolio-amount {
         font-size: 10px;
         color: #7f8c8d;
         margin: 0;
         line-height: 1.2;
+        text-align: center;
+        width: 100%;
     }
     .portfolio-total {
         background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
@@ -470,24 +503,74 @@ def display_portfolio_distribution(holdings, prices):
         st.info("Add some holdings to see portfolio distribution")
 
 
-def display_portfolio_management_buttons():
-    """Display portfolio management buttons (Reset to Default, Clear All)"""
+def display_portfolio_management_buttons(binance_prices=None):
+    """Display portfolio management buttons with price controls (Reset to Default, Clear All, Force Refresh, Test APIs, Status)"""
     import streamlit as st
+    from utils.cache import clear_price_cache, cached_get_crypto_prices
+    from utils.diagnostics import test_api_connectivity
     
     st.markdown("<br>", unsafe_allow_html=True)
-    load_col, clear_col, spacer = st.columns([1, 1, 1])
     
-    with load_col:
-        if st.button("📂 Reset to Default", type="secondary", use_container_width=True):
+    # Create 5 columns for all controls in one row
+    # Equal width for all buttons, larger for status
+    reset_col, clear_col, refresh_col, test_col, status_col = st.columns([1, 1, 1, 1, 1.6])
+    
+    with reset_col:
+        if st.button("📂 Reset to Default", type="secondary", help="Reset to default portfolio holdings"):
             reset_to_default_portfolio()
             st.success("✅ Reset to default portfolio")
             st.rerun()
     
     with clear_col:
-        if st.button("🗑️ Clear All", type="primary", use_container_width=True):
+        if st.button("🗑️ Clear All", type="primary", help="Clear all portfolio holdings"):
             clear_portfolio()
             st.success("✅ Cleared all holdings")
             st.rerun()
+    
+    with refresh_col:
+        if st.button("🔄 Force Refresh Prices", type="secondary", help="Force fresh API calls"):
+            clear_price_cache()
+            with st.spinner("Fetching fresh prices from multiple exchanges..."):
+                price_result = cached_get_crypto_prices()
+                
+            sources_used = price_result.get('sources_used', [])
+            sources_text = f" via {', '.join(sources_used)}" if sources_used else ""
+            
+            if price_result['success_count'] == price_result['total_count']:
+                st.success(f"✅ All prices refreshed successfully{sources_text}!")
+            else:
+                st.error(f"❌ Price refresh failed ({price_result['success_count']}/{price_result['total_count']} successful){sources_text}")
+                for error in price_result.get('errors', []):
+                    st.error(error)
+            st.rerun()
+    
+    with test_col:
+        if st.button("🔍 Test APIs", type="secondary", help="Test API connectivity"):
+            with st.spinner("Testing API connectivity..."):
+                connectivity_results = test_api_connectivity()
+            
+            st.write("**API Connectivity Test Results:**")
+            for api_name, status in connectivity_results.items():
+                if "✅" in status:
+                    st.success(f"{api_name}: {status}")
+                elif "⚠️" in status:
+                    st.warning(f"{api_name}: {status}")
+                else:
+                    st.error(f"{api_name}: {status}")
+    
+    with status_col:
+        # Show current API status
+        if binance_prices:
+            valid_prices = len([p for p in binance_prices.values() if p is not None and p > 0])
+            total_prices = len(binance_prices)
+            if valid_prices == total_prices:
+                st.info(f"🟢 Live Prices: {valid_prices}/{total_prices} APIs working")
+            elif valid_prices > 0:
+                st.warning(f"🟡 Live Prices: {valid_prices}/{total_prices} APIs working")
+            else:
+                st.error(f"🔴 Live Prices: {valid_prices}/{total_prices} APIs working")
+        else:
+            st.info("🔄 Loading price status...")
 
 
 def generate_portfolio_summary_boxes(
