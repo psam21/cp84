@@ -506,8 +506,12 @@ def display_portfolio_distribution(holdings, prices):
 def display_portfolio_management_buttons(binance_prices=None):
     """Display portfolio management buttons with price controls (Reset to Default, Clear All, Force Refresh, Test APIs, Status)"""
     import streamlit as st
-    from utils.cache import clear_price_cache, cached_get_crypto_prices
-    from utils.diagnostics import test_api_connectivity
+    try:
+        from utils.cache import clear_price_cache, cached_get_crypto_prices
+        from utils.diagnostics import test_api_connectivity
+    except ImportError as e:
+        st.error(f"Import error: {e}")
+        return
     
     st.markdown("<br>", unsafe_allow_html=True)
     
@@ -529,47 +533,56 @@ def display_portfolio_management_buttons(binance_prices=None):
     
     with refresh_col:
         if st.button("🔄 Force Refresh Prices", type="secondary", help="Force fresh API calls"):
-            clear_price_cache()
-            with st.spinner("Fetching fresh prices from multiple exchanges..."):
-                price_result = cached_get_crypto_prices()
+            try:
+                clear_price_cache()
+                with st.spinner("Fetching fresh prices from multiple exchanges..."):
+                    price_result = cached_get_crypto_prices()
+                    
+                sources_used = price_result.get('sources_used', [])
+                sources_text = f" via {', '.join(sources_used)}" if sources_used else ""
                 
-            sources_used = price_result.get('sources_used', [])
-            sources_text = f" via {', '.join(sources_used)}" if sources_used else ""
-            
-            if price_result['success_count'] == price_result['total_count']:
-                st.success(f"✅ All prices refreshed successfully{sources_text}!")
-            else:
-                st.error(f"❌ Price refresh failed ({price_result['success_count']}/{price_result['total_count']} successful){sources_text}")
-                for error in price_result.get('errors', []):
-                    st.error(error)
-            st.rerun()
+                if price_result.get('success_count', 0) == price_result.get('total_count', 0):
+                    st.success(f"✅ All prices refreshed successfully{sources_text}!")
+                else:
+                    st.error(f"❌ Price refresh failed ({price_result.get('success_count', 0)}/{price_result.get('total_count', 0)} successful){sources_text}")
+                    for error in price_result.get('errors', []):
+                        st.error(error)
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ Error refreshing prices: {str(e)}")
     
     with test_col:
         if st.button("🔍 Test APIs", type="secondary", help="Test API connectivity"):
-            with st.spinner("Testing API connectivity..."):
-                connectivity_results = test_api_connectivity()
-            
-            st.write("**API Connectivity Test Results:**")
-            for api_name, status in connectivity_results.items():
-                if "✅" in status:
-                    st.success(f"{api_name}: {status}")
-                elif "⚠️" in status:
-                    st.warning(f"{api_name}: {status}")
-                else:
-                    st.error(f"{api_name}: {status}")
+            try:
+                with st.spinner("Testing API connectivity..."):
+                    connectivity_results = test_api_connectivity()
+                
+                st.write("**API Connectivity Test Results:**")
+                for api_name, status in connectivity_results.items():
+                    if "✅" in str(status):
+                        st.success(f"{api_name}: {status}")
+                    elif "⚠️" in str(status):
+                        st.warning(f"{api_name}: {status}")
+                    else:
+                        st.error(f"{api_name}: {status}")
+            except Exception as e:
+                st.error(f"❌ Error testing APIs: {str(e)}")
     
     with status_col:
         # Show current API status
-        if binance_prices:
-            valid_prices = len([p for p in binance_prices.values() if p is not None and p > 0])
-            total_prices = len(binance_prices)
-            if valid_prices == total_prices:
-                st.info(f"🟢 Live Prices: {valid_prices}/{total_prices} APIs working")
-            elif valid_prices > 0:
-                st.warning(f"🟡 Live Prices: {valid_prices}/{total_prices} APIs working")
+        try:
+            if binance_prices and isinstance(binance_prices, dict) and binance_prices:
+                valid_prices = len([p for p in binance_prices.values() if p is not None and p > 0])
+                total_prices = len(binance_prices)
+                if valid_prices == total_prices:
+                    st.info(f"🟢 Live Prices: {valid_prices}/{total_prices} APIs working")
+                elif valid_prices > 0:
+                    st.warning(f"🟡 Live Prices: {valid_prices}/{total_prices} APIs working")
+                else:
+                    st.error(f"🔴 Live Prices: {valid_prices}/{total_prices} APIs working")
             else:
-                st.error(f"🔴 Live Prices: {valid_prices}/{total_prices} APIs working")
-        else:
+                st.info("🔄 Loading price status...")
+        except Exception as e:
             st.info("🔄 Loading price status...")
 
 
